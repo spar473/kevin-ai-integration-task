@@ -1,0 +1,37 @@
+# Secrets and local environments
+.env
+.env.*
+!.env.example
+.venv/
+
+# Python and test caches
+__pycache__/
+*.py[cod]
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+.coverage
+htmlcov/
+
+# Streamlit
+.streamlit/secrets.toml
+
+# Runtime data and generated output
+data/sessions/
+data/outputs/
+outputs/
+generated/
+uploads/
+candidate_uploads/
+*.log
+logs/
+
+# IDE, OS, and temporary files
+.vscode/
+.idea/
+*.swp
+*~
+.DS_Store
+Thumbs.db
+Desktop.ini
+
