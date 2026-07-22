@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from datetime import UTC, datetime
 from enum import Enum
-from typing import Annotated
+from typing import Annotated, ClassVar
 
 from pydantic import BaseModel, ConfigDict, Field, field_validator, model_validator
 
@@ -107,6 +107,13 @@ class WorkflowStage(str, Enum):
     QUALITY_REVIEW = "quality_review"
     MANAGER_APPROVAL = "manager_approval"
     COMPLETE = "complete"
+
+
+class DiscoveryProgressRecommendation(str, Enum):
+    """Non-binding model advice interpreted by application-owned transitions."""
+
+    STAY = "stay"
+    ADVANCE = "advance"
 
 
 class CandidateSourceType(str, Enum):
@@ -300,11 +307,244 @@ class ClarificationQuestion(DomainModel):
     purpose: str | None = None
 
 
+class DiscoveryAssumption(DomainModel):
+    """An inference that remains explicitly subject to manager confirmation."""
+
+    assumption_id: NonEmptyText
+    statement: NonEmptyText
+    source_statement: NonEmptyText
+    requires_confirmation: bool
+
+
+class UnresolvedAmbiguity(DomainModel):
+    """A missing or vague detail preserved with its source wording."""
+
+    ambiguity_id: NonEmptyText
+    description: NonEmptyText
+    source_statement: NonEmptyText
+    why_confirmation_is_needed: NonEmptyText
+
+
+class DiscoverySemanticValidationError(ValueError):
+    """Safe semantic failure containing locations and codes, never values."""
+
+    def __init__(self, issues: list[tuple[str, str]]) -> None:
+        super().__init__("Discovery extraction failed semantic validation.")
+        self.issues = tuple(issues)
+
+
+class ProviderDiscoveryModel(BaseModel):
+    """Provider contract base kept deliberately structural and compact."""
+
+    model_config = ConfigDict(extra="forbid", strict=True)
+    inline_provider_schema: ClassVar[bool] = True
+
+
+class DiscoveryRequirementExtraction(ProviderDiscoveryModel):
+    """Compact source-backed requirement proposed by the model."""
+
+    category: str = Field(
+        json_schema_extra={"enum": [item.value for item in RequirementCategory]}
+    )
+    name: str
+    description: str
+    priority: str = Field(
+        json_schema_extra={"enum": [item.value for item in RequirementPriority]}
+    )
+    rationale: str
+    source_statement: str
+
+
+class DiscoveryAssumptionExtraction(ProviderDiscoveryModel):
+    """Compact inference that remains unconfirmed after mapping."""
+
+    statement: str
+    source_statement: str
+
+
+class DiscoveryAmbiguityExtraction(ProviderDiscoveryModel):
+    """Compact unresolved detail with source traceability."""
+
+    description: str
+    source_statement: str
+    why_confirmation_is_needed: str
+
+
+class DiscoveryContradictionExtraction(ProviderDiscoveryModel):
+    """Compact possible conflict between source statements."""
+
+    description: str
+    source_statements: list[str]
+
+
+class DiscoveryExtractionResponse(ProviderDiscoveryModel):
+    """Minimal provider-facing contract for one discovery extraction."""
+
+    incremental_requirements: list[DiscoveryRequirementExtraction]
+    assumptions: list[DiscoveryAssumptionExtraction]
+    ambiguities: list[DiscoveryAmbiguityExtraction]
+    possible_contradictions: list[DiscoveryContradictionExtraction]
+    next_question: str
+    stage_recommendation: str = Field(
+        json_schema_extra={
+            "enum": [
+                DiscoveryProgressRecommendation.STAY.value,
+                DiscoveryProgressRecommendation.ADVANCE.value,
+            ]
+        }
+    )
+
+    def semantic_issues(self) -> list[tuple[str, str]]:
+        """Return safe semantic locations and codes without generated values."""
+        issues: list[tuple[str, str]] = []
+
+        def require_text(location: str, value: str) -> None:
+            if not value.strip():
+                issues.append((location, "empty_string"))
+
+        categories = {item.value for item in RequirementCategory}
+        priorities = {item.value for item in RequirementPriority}
+        recommendations = {item.value for item in DiscoveryProgressRecommendation}
+        for index, requirement in enumerate(self.incremental_requirements):
+            prefix = f"incremental_requirements.{index}"
+            for field_name in (
+                "name",
+                "description",
+                "rationale",
+                "source_statement",
+            ):
+                require_text(f"{prefix}.{field_name}", getattr(requirement, field_name))
+            if requirement.category not in categories:
+                issues.append((f"{prefix}.category", "unsupported_category"))
+            if requirement.priority not in priorities:
+                issues.append((f"{prefix}.priority", "unsupported_priority"))
+        for index, assumption in enumerate(self.assumptions):
+            prefix = f"assumptions.{index}"
+            require_text(f"{prefix}.statement", assumption.statement)
+            require_text(f"{prefix}.source_statement", assumption.source_statement)
+        for index, ambiguity in enumerate(self.ambiguities):
+            prefix = f"ambiguities.{index}"
+            require_text(f"{prefix}.description", ambiguity.description)
+            require_text(f"{prefix}.source_statement", ambiguity.source_statement)
+            require_text(
+                f"{prefix}.why_confirmation_is_needed",
+                ambiguity.why_confirmation_is_needed,
+            )
+        for index, contradiction in enumerate(self.possible_contradictions):
+            prefix = f"possible_contradictions.{index}"
+            require_text(f"{prefix}.description", contradiction.description)
+            if len(contradiction.source_statements) < 2:
+                issues.append(
+                    (f"{prefix}.source_statements", "insufficient_source_statements")
+                )
+            for source_index, statement in enumerate(
+                contradiction.source_statements
+            ):
+                require_text(
+                    f"{prefix}.source_statements.{source_index}", statement
+                )
+        require_text("next_question", self.next_question)
+        if (
+            self.next_question.count("?") != 1
+            or "\n" in self.next_question
+            or "\r" in self.next_question
+        ):
+            issues.append(("next_question", "invalid_single_question"))
+        require_text("stage_recommendation", self.stage_recommendation)
+        if self.stage_recommendation not in recommendations:
+            issues.append(("stage_recommendation", "unsupported_stage"))
+        return issues
+
+    def validate_semantics(self) -> None:
+        """Raise a value-free error when application constraints fail."""
+        issues = self.semantic_issues()
+        if issues:
+            raise DiscoverySemanticValidationError(issues)
+
+    def to_discovery_turn_result(
+        self,
+        *,
+        current_stage: WorkflowStage,
+        source_turn_id: str = "initial_manager_statement",
+    ) -> DiscoveryTurnResult:
+        """Add deterministic domain fields after provider validation."""
+        self.validate_semantics()
+        from src.workflow import progress_recommendation_stage
+
+        target_stage = progress_recommendation_stage(
+            current_stage,
+            DiscoveryProgressRecommendation(self.stage_recommendation),
+        )
+        requirements = [
+            Requirement(
+                requirement_id=f"requirement_{index:03d}",
+                category=RequirementCategory(item.category),
+                name=item.name,
+                description=item.description,
+                priority=RequirementPriority(item.priority),
+                proficiency=None,
+                learnability=None,
+                accepted_equivalents=[],
+                business_rationale=item.rationale,
+                evidence_methods=[],
+                source_statement=item.source_statement,
+                source_turn_id=source_turn_id,
+                confidence=None,
+                requires_confirmation=True,
+                approved_by_human=False,
+            )
+            for index, item in enumerate(self.incremental_requirements, start=1)
+        ]
+        assumptions = [
+            DiscoveryAssumption(
+                assumption_id=f"assumption_{index:03d}",
+                statement=item.statement,
+                source_statement=item.source_statement,
+                requires_confirmation=True,
+            )
+            for index, item in enumerate(self.assumptions, start=1)
+        ]
+        ambiguities = [
+            UnresolvedAmbiguity(
+                ambiguity_id=f"ambiguity_{index:03d}",
+                description=item.description,
+                source_statement=item.source_statement,
+                why_confirmation_is_needed=item.why_confirmation_is_needed,
+            )
+            for index, item in enumerate(self.ambiguities, start=1)
+        ]
+        contradictions = [
+            Contradiction(
+                contradiction_id=f"contradiction_{index:03d}",
+                description=item.description,
+                severity="low",
+                source_statements=list(item.source_statements),
+                resolution=None,
+                resolved=False,
+            )
+            for index, item in enumerate(self.possible_contradictions, start=1)
+        ]
+        return DiscoveryTurnResult(
+            extracted_requirements=requirements,
+            assumptions=assumptions,
+            ambiguities=ambiguities,
+            contradictions=contradictions,
+            next_question=ClarificationQuestion(
+                question_id="question_001",
+                question=self.next_question,
+                target_stage=target_stage,
+                purpose=None,
+            ),
+            confidence=None,
+        )
+
+
 class DiscoveryTurnResult(DomainModel):
     """Small structured result for one discovery extraction turn."""
 
     extracted_requirements: list[Requirement] = Field(default_factory=list)
-    ambiguities: list[str] = Field(default_factory=list)
+    assumptions: list[DiscoveryAssumption] = Field(default_factory=list)
+    ambiguities: list[UnresolvedAmbiguity] = Field(default_factory=list)
     contradictions: list[Contradiction] = Field(default_factory=list)
     next_question: ClarificationQuestion
     confidence: Confidence | None = None

@@ -5,6 +5,7 @@ from __future__ import annotations
 from pydantic import BaseModel, ConfigDict, Field
 
 from src.models import (
+    DiscoveryProgressRecommendation,
     Learnability,
     RequirementPriority,
     RoleSpecification,
@@ -13,6 +14,26 @@ from src.models import (
 
 
 DISCOVERY_STAGES: tuple[WorkflowStage, ...] = tuple(WorkflowStage)
+
+
+class DiscoveryTransitionUnavailable(ValueError):
+    """Raised when a progress recommendation has no deterministic transition."""
+
+    def __init__(self) -> None:
+        super().__init__("Discovery progress transition is unavailable.")
+
+
+def progress_recommendation_stage(
+    current_stage: WorkflowStage,
+    recommendation: DiscoveryProgressRecommendation,
+) -> WorkflowStage:
+    """Resolve stay or advance using the application-owned stage order."""
+    if recommendation is DiscoveryProgressRecommendation.STAY:
+        return current_stage
+    current_index = DISCOVERY_STAGES.index(current_stage)
+    if current_index + 1 >= len(DISCOVERY_STAGES):
+        raise DiscoveryTransitionUnavailable()
+    return DISCOVERY_STAGES[current_index + 1]
 
 
 class WorkflowState(BaseModel):
@@ -130,4 +151,3 @@ def next_incomplete_stage(state: WorkflowState) -> WorkflowStage:
 def advance_workflow(state: WorkflowState) -> WorkflowState:
     """Return a copied state positioned at its next incomplete stage."""
     return state.model_copy(update={"current_stage": next_incomplete_stage(state)})
-

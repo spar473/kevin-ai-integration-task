@@ -25,6 +25,21 @@ class Settings(BaseModel):
     app_env: str = "development"
     openrouter_api_key: SecretStr | None = Field(default=None, repr=False)
 
+    @field_validator("openrouter_base_url")
+    @classmethod
+    def base_url_must_not_be_a_completion_endpoint(
+        cls, value: AnyHttpUrl
+    ) -> AnyHttpUrl:
+        """Require an API base URL rather than a complete chat-completions endpoint."""
+        path = value.path.rstrip("/")
+        if path.endswith("/chat/completions"):
+            raise ValueError(
+                "OPENROUTER_BASE_URL must be an API base URL, not /chat/completions"
+            )
+        if path != "/api/v1":
+            raise ValueError("OPENROUTER_BASE_URL must end with /api/v1")
+        return value
+
     @field_validator("openrouter_model", mode="before")
     @classmethod
     def empty_model_is_unconfigured(cls, value: object) -> object:
@@ -100,4 +115,3 @@ class Settings(BaseModel):
             openrouter_model=env.get("OPENROUTER_MODEL"),
             app_env=env.get("APP_ENV", "development"),
         )
-
