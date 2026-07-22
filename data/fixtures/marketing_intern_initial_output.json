@@ -1,0 +1,138 @@
+{
+  "validated_discovery_turn_result": {
+    "extracted_requirements": [
+      {
+        "requirement_id": "requirement_001",
+        "category": "logistical",
+        "name": "Summer internship timing",
+        "description": "The role is described as a Marketing Intern position for summer; exact dates and duration are not specified.",
+        "priority": "must_have",
+        "proficiency": null,
+        "learnability": null,
+        "accepted_equivalents": [],
+        "business_rationale": "The manager explicitly states that the internship is for summer.",
+        "evidence_methods": [],
+        "source_statement": "We need a Marketing Intern for summer.",
+        "source_turn_id": "initial_manager_statement",
+        "confidence": null,
+        "requires_confirmation": true,
+        "approved_by_human": false
+      },
+      {
+        "requirement_id": "requirement_002",
+        "category": "technical",
+        "name": "Social media capability",
+        "description": "Capability related to social media is requested, but the expected platforms, tasks, and proficiency level are unspecified.",
+        "priority": "must_have",
+        "proficiency": null,
+        "learnability": null,
+        "accepted_equivalents": [],
+        "business_rationale": "The manager states that the intern should be good with social media.",
+        "evidence_methods": [],
+        "source_statement": "They should be creative and good with social media.",
+        "source_turn_id": "initial_manager_statement",
+        "confidence": null,
+        "requires_confirmation": true,
+        "approved_by_human": false
+      },
+      {
+        "requirement_id": "requirement_003",
+        "category": "domain",
+        "name": "TikTok-related work",
+        "description": "The intern will work with the team on TikTok-related activities; the specific responsibilities are not specified.",
+        "priority": "must_have",
+        "proficiency": null,
+        "learnability": null,
+        "accepted_equivalents": [],
+        "business_rationale": "The manager explicitly mentions working with the team on TikTok activities.",
+        "evidence_methods": [],
+        "source_statement": "They'll work with the team on TikTok stuff and help with campaigns.",
+        "source_turn_id": "initial_manager_statement",
+        "confidence": null,
+        "requires_confirmation": true,
+        "approved_by_human": false
+      },
+      {
+        "requirement_id": "requirement_004",
+        "category": "domain",
+        "name": "Campaign support",
+        "description": "The intern will help with campaigns; the nature and scope of campaign support are unspecified.",
+        "priority": "must_have",
+        "proficiency": null,
+        "learnability": null,
+        "accepted_equivalents": [],
+        "business_rationale": "The manager explicitly states that the intern will help with campaigns.",
+        "evidence_methods": [],
+        "source_statement": "They'll work with the team on TikTok stuff and help with campaigns.",
+        "source_turn_id": "initial_manager_statement",
+        "confidence": null,
+        "requires_confirmation": true,
+        "approved_by_human": false
+      }
+    ],
+    "assumptions": [
+      {
+        "assumption_id": "assumption_001",
+        "statement": "The role is likely an internship-level marketing position, based on its title; no seniority, prior-experience, or educational requirements are stated.",
+        "source_statement": "We need a Marketing Intern for summer.",
+        "requires_confirmation": true
+      }
+    ],
+    "ambiguities": [
+      {
+        "ambiguity_id": "ambiguity_001",
+        "description": "\u201cCreative\u201d is subjective and does not specify observable, job-relevant work outputs or behaviours. Clarify the types of marketing work or examples of creative contribution expected.",
+        "source_statement": "They should be creative and good with social media.",
+        "why_confirmation_is_needed": "A candidate requirement cannot be evaluated consistently without defined, observable expectations."
+      },
+      {
+        "ambiguity_id": "ambiguity_002",
+        "description": "\u201cGood with social media\u201d does not identify relevant platforms, expected activities, proficiency level, or evidence of capability.",
+        "source_statement": "They should be creative and good with social media.",
+        "why_confirmation_is_needed": "The required social-media skills and scope need definition before they can be treated as assessable requirements."
+      },
+      {
+        "ambiguity_id": "ambiguity_003",
+        "description": "\u201cTikTok stuff\u201d does not specify whether the work involves content ideation, creation, posting, community engagement, analytics, or another activity.",
+        "source_statement": "They'll work with the team on TikTok stuff and help with campaigns.",
+        "why_confirmation_is_needed": "The specific TikTok responsibilities determine the relevant skills and expected deliverables."
+      },
+      {
+        "ambiguity_id": "ambiguity_004",
+        "description": "\u201cHelp with campaigns\u201d does not specify the campaign types, tasks, channels, or level of ownership.",
+        "source_statement": "They'll work with the team on TikTok stuff and help with campaigns.",
+        "why_confirmation_is_needed": "The campaign-support scope is needed to define the role accurately."
+      },
+      {
+        "ambiguity_id": "ambiguity_005",
+        "description": "\u201cFun to work with\u201d is subjective culture-fit language. Clarify the observable, job-relevant collaborative behaviours expected when working with the team.",
+        "source_statement": "Should be fun to work with.",
+        "why_confirmation_is_needed": "Personality-based language should be translated into specific collaboration expectations rather than used as a candidate requirement."
+      },
+      {
+        "ambiguity_id": "ambiguity_006",
+        "description": "Summer timing is not defined by dates, duration, expected weekly hours, or work location.",
+        "source_statement": "We need a Marketing Intern for summer.",
+        "why_confirmation_is_needed": "Candidates need the practical internship schedule and location expectations to determine availability."
+      }
+    ],
+    "contradictions": [],
+    "next_question": {
+      "question_id": "question_001",
+      "question": "What specific TikTok and campaign tasks will the summer Marketing Intern be responsible for?",
+      "target_stage": "basic_info",
+      "purpose": null
+    },
+    "confidence": null
+  },
+  "model": "openai/gpt-5.6-terra",
+  "provider": "OpenAI",
+  "schema_mode": "strict_json_schema",
+  "token_usage": {
+    "input_tokens": 674,
+    "output_tokens": 750,
+    "total_tokens": 1424
+  },
+  "latency_ms": 8277,
+  "validation_status": "passed"
+}

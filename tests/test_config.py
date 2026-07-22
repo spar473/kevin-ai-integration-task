@@ -35,6 +35,20 @@ def test_missing_api_key_is_allowed_for_non_api_setup() -> None:
         settings.require_api_configuration()
 
 
+def test_missing_model_fails_only_when_an_api_call_is_requested() -> None:
+    settings = Settings.from_env(
+        {
+            "OPENROUTER_API_KEY": "test-key",
+            "OPENROUTER_BASE_URL": "https://openrouter.ai/api/v1",
+            "APP_ENV": "test",
+        }
+    )
+
+    assert settings.api_key_configured is True
+    with pytest.raises(ConfigurationError, match="OPENROUTER_MODEL"):
+        settings.require_api_configuration()
+
+
 def test_invalid_base_url_fails_validation() -> None:
     with pytest.raises(ValidationError):
         Settings.from_env(
@@ -44,3 +58,24 @@ def test_invalid_base_url_fails_validation() -> None:
             }
         )
 
+
+def test_completion_endpoint_is_not_accepted_as_a_base_url() -> None:
+    with pytest.raises(ValidationError, match="API base URL"):
+        Settings.from_env(
+            {
+                "OPENROUTER_BASE_URL": (
+                    "https://openrouter.ai/api/v1/chat/completions"
+                ),
+                "APP_ENV": "test",
+            }
+        )
+
+
+def test_base_url_without_api_v1_is_rejected() -> None:
+    with pytest.raises(ValidationError, match="must end with /api/v1"):
+        Settings.from_env(
+            {
+                "OPENROUTER_BASE_URL": "https://openrouter.ai",
+                "APP_ENV": "test",
+            }
+        )
