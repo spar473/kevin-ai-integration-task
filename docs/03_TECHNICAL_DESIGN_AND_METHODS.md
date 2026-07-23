@@ -1072,6 +1072,117 @@ This is not calibrated probability.
 
 ---
 
+## 17.5 Implemented Phase 7 evaluation contract
+
+The implemented response evaluator follows this flow:
+
+```text
+approved role snapshot
+    -> exact versioned hiring pack
+    -> candidate response set
+    -> explicit untrusted-data boundary
+    -> structured evidence extraction
+    -> deterministic traceability and policy validation
+    -> deterministic evidence quality, score, and confidence
+    -> requirement-level assessments
+    -> versioned CandidateEvaluation
+    -> one append-only assessment audit event
+```
+
+### Source binding and stale packs
+
+Every accepted evaluation stores the role ID/version, hiring-pack ID/version,
+candidate response-set ID, evaluator, model/provider metadata, and prompt
+version. The service rejects a mismatched or stale pack rather than silently
+using the current pack. Historical evaluation is possible only when the caller
+loads the exact approved role snapshot and pack version that collected the
+responses.
+
+### Evidence quality and score
+
+Evidence quality is derived from relevance, specificity, candidate ownership,
+concrete action, outcome, reflection, inference, hypothetical framing, and
+verifiability:
+
+```text
+no_evidence
+generic_assertion
+relevant_weak
+specific_behavioural
+strong_ownership_action_result
+independently_verifiable
+```
+
+The provider proposes a score, but the application independently derives the
+permitted score and requires an exact match:
+
+- direct negative evidence: `0`;
+- no evidence: `1`;
+- generic, inferred, hypothetical, or weak evidence: at most `2`;
+- specific behavioural evidence: `3`;
+- strong ownership, action, and outcome: `4`;
+- exceptional, relevant, potentially verifiable evidence with reflection: `5`.
+
+The displayed rubric text is resolved from the selected real screening
+question and score. Provider-created anchors are never accepted.
+
+### Confidence, missing evidence, and contradictions
+
+Confidence remains separate from score and uses the documented weighted
+factors: specificity, relevance, ownership, verifiability, consistency, and
+completeness. It is reduced for inference, hypothetical answers,
+contradictions, missing evidence, and prompt-injection indicators. An explicit
+negative statement can therefore have a low score with high confidence, while
+a missing response has score `1` with low confidence.
+
+Missing evidence is described as absence in the supplied material, not
+inability. Contradictions must link to evidence IDs, use neutral language,
+reduce confidence, and include a targeted human follow-up. The evaluator does
+not accuse a candidate of dishonesty.
+
+### Prompt injection and fairness
+
+The system prompt contains no candidate content. Candidate records appear only
+in a clearly delimited JSON data block. Instruction overrides, fake
+system/developer messages, fake output JSON, maximum-score requests,
+missing-evidence overrides, role-playing, boundary manipulation, and prompt
+disclosure requests are detected as indicators and remain candidate data.
+
+Application validation rejects instruction text presented as evidence,
+unknown IDs, unsupported quotes, schema manipulation, fabricated rubric
+anchors, hidden-prompt disclosure, autonomous hiring decisions, and
+protected-characteristic content in evidence or reviewer follow-ups. Genuine
+behavioural evidence may still be extracted as a separately scoped excerpt
+from an answer that also contains irrelevant personal information.
+
+### Persistence, re-evaluation, and human review
+
+`candidate_evaluation.json` is the current session pointer. Immutable versions
+are retained under:
+
+```text
+candidate_evaluations/<evaluation_id>/candidate_evaluation_v<version>.json
+```
+
+The same response set can be evaluated again using a stable evaluation ID and
+incremented version. Changed source content creates a new evaluation ID. Human
+review edits append another version, preserve role/pack/source provenance,
+validate mappings and score caps, and use the existing
+`human_review_recorded` audit event. A no-op save writes neither a version nor
+an event. Audit metadata contains counts, IDs, versions, provider/model
+metadata, validation outcome, and an injection-indicator boolean, but never
+full answers, prompts, keys, or secrets.
+
+### Human responsibility and limitations
+
+Routing describes evidence state (`strong_evidence`, `adequate_evidence`,
+`insufficient_evidence`, `contradictory_evidence`, or
+`human_review_required`); it is not a hiring decision. A human reviewer remains
+accountable. Contradiction detection and evidence extraction still depend on
+model language understanding, deterministic fairness checks are pattern-based,
+and synthetic regression fixtures do not establish production calibration or
+legal compliance.
+
 # 18. JSON storage design
 
 ## 18.1 Session folder

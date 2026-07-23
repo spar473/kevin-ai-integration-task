@@ -862,10 +862,6 @@ def approval_blockers(role: RoleSpecification) -> list[str]:
         for item in normalise_contradictions(role)
     ):
         blockers.append("High or critical contradictions must be resolved.")
-    blockers.extend(
-        f"Critical field remains missing: {field_name}"
-        for field_name in role.quality.critical_missing_fields
-    )
     return blockers
 
 

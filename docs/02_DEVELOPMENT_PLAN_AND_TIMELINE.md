@@ -907,6 +907,24 @@ feat: generate traceable JD and screening pack
 
 Implement task-required candidate response assessment before CV support.
 
+## Implementation status — 2026-07-24
+
+Phase 7 is implemented in `src/evaluation.py` and the Candidate Evidence
+Streamlit tab. The implementation uses the existing provider-neutral
+`LLMClient`, the approved `RoleSpecification`, and one exact `HiringPack`
+version. Candidate text is isolated as untrusted data; evidence extraction is
+model-assisted, while eligibility, traceability, evidence quality, score,
+confidence, completeness, routing, persistence, and audit rules are
+deterministic.
+
+The stale-pack policy follows the technical design: evaluation is blocked when
+the supplied role snapshot does not match the pack's source role version. A
+matching approved historical role snapshot may be evaluated without rewriting
+the pack. Re-evaluating the same immutable response set retains a stable
+evaluation ID and appends a new version. Changed response content creates a new
+evaluation record rather than rewriting history. Human review edits likewise
+append a version and preserve generated provenance.
+
 ## Input
 
 - approved role;

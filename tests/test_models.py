@@ -19,6 +19,7 @@ from src.models import (
     RequirementPriority,
     RoleFamily,
     RoleLevel,
+    RoleQuality,
     RoleSpecification,
 )
 
@@ -150,3 +151,25 @@ def test_role_json_round_trip() -> None:
     restored = RoleSpecification.model_validate(json.loads(payload))
 
     assert restored == role
+
+
+def test_role_quality_drops_retired_fields_from_legacy_session_payloads() -> None:
+    payload = valid_role().model_dump(mode="python")
+    payload["quality"].update(
+        readiness_score=40,
+        critical_missing_fields=["decision_owner"],
+        ambiguities=["Location is unclear."],
+    )
+    role = RoleSpecification.model_validate(payload)
+
+    assert role.quality.model_dump() == {
+        "readiness_score": 40,
+        "contradictions": [],
+        "warnings": [],
+        "warning_acknowledgements": [],
+    }
+
+
+def test_role_quality_still_rejects_unknown_non_legacy_fields() -> None:
+    with pytest.raises(ValidationError, match="extra_forbidden"):
+        RoleQuality.model_validate({"unexpected_field": []})

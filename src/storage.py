@@ -15,6 +15,7 @@ from typing import Literal, TypeVar
 from pydantic import BaseModel, ConfigDict, Field, ValidationError
 
 from src.models import (
+    CandidateEvaluation,
     ClarificationQuestion,
     HiringPack,
     RoleSpecification,
@@ -130,6 +131,7 @@ class SessionSnapshot(StorageModel):
     messages: list[DiscoveryMessage]
     audit_log: AuditLog
     hiring_pack: HiringPack | None = None
+    candidate_evaluation: CandidateEvaluation | None = None
 
 
 def append_audit_event(
@@ -447,6 +449,131 @@ def record_hiring_pack_edited(
     )
 
 
+def _candidate_evaluation_content_hash(evaluation: CandidateEvaluation) -> str:
+    content = {
+        "evidence_items": [
+            item.model_dump(mode="json") for item in evaluation.evidence_items
+        ],
+        "assessments": [
+            item.model_dump(mode="json") for item in evaluation.assessments
+        ],
+        "reviewer_guidance": evaluation.reviewer_guidance,
+    }
+    canonical = json.dumps(
+        content,
+        ensure_ascii=False,
+        sort_keys=True,
+        separators=(",", ":"),
+    ).encode("utf-8")
+    return sha256(canonical).hexdigest()
+
+
+def record_candidate_evaluation_generated(
+    audit_log: AuditLog,
+    *,
+    role: RoleSpecification,
+    evaluation: CandidateEvaluation,
+) -> AuditLog:
+    """Record one fully validated and already-persistable evaluation version."""
+    response_set = evaluation.source_response_set
+    if (
+        not evaluation.evaluation_id
+        or evaluation.evaluated_at is None
+        or evaluation.evaluated_by is None
+        or response_set is None
+        or evaluation.role_id != role.role_id
+        or evaluation.role_version != role.version
+    ):
+        raise AuditIntegrityError(
+            "Candidate evaluation provenance is incomplete or mismatched."
+        )
+    return append_audit_event(
+        audit_log,
+        AuditEventType.ASSESSMENT_GENERATED,
+        role=role,
+        actor=evaluation.evaluated_by,
+        occurred_at=evaluation.evaluated_at,
+        inherit_role_audit=False,
+        artifact_model=evaluation.model,
+        artifact_prompt_version=evaluation.prompt_version,
+        metadata={
+            "candidate_id": evaluation.candidate_id,
+            "evaluation_id": evaluation.evaluation_id,
+            "evaluation_version": evaluation.version,
+            "source_role_id": evaluation.role_id,
+            "source_role_version": evaluation.role_version,
+            "source_hiring_pack_id": evaluation.hiring_pack_id,
+            "source_hiring_pack_version": evaluation.hiring_pack_version,
+            "response_count": len(response_set.responses),
+            "evidence_count": len(evaluation.evidence_items),
+            "assessment_count": len(evaluation.assessments),
+            "provider": evaluation.provider,
+            "prompt_injection_detected": evaluation.prompt_injection_detected,
+            "validation_outcome": "passed",
+        },
+    )
+
+
+def record_candidate_evaluation_edited(
+    audit_log: AuditLog,
+    *,
+    role: RoleSpecification,
+    previous_evaluation: CandidateEvaluation,
+    updated_evaluation: CandidateEvaluation,
+    changed_fields: list[str],
+) -> AuditLog:
+    """Record one meaningful human review without retaining candidate answers."""
+    if not changed_fields:
+        raise AuditIntegrityError("A no-op candidate review cannot be audited.")
+    if (
+        not updated_evaluation.evaluation_id
+        or previous_evaluation.evaluation_id != updated_evaluation.evaluation_id
+        or updated_evaluation.version != previous_evaluation.version + 1
+        or updated_evaluation.parent_version != previous_evaluation.version
+        or not updated_evaluation.human_edited
+        or updated_evaluation.last_edited_by is None
+        or updated_evaluation.last_edited_at is None
+    ):
+        raise AuditIntegrityError("Candidate review version metadata is invalid.")
+    if (
+        updated_evaluation.role_id != role.role_id
+        or updated_evaluation.role_version != role.version
+        or updated_evaluation.hiring_pack_id
+        != previous_evaluation.hiring_pack_id
+        or updated_evaluation.hiring_pack_version
+        != previous_evaluation.hiring_pack_version
+    ):
+        raise AuditIntegrityError(
+            "Candidate review does not preserve source role and pack versions."
+        )
+    before_hash = _candidate_evaluation_content_hash(previous_evaluation)
+    after_hash = _candidate_evaluation_content_hash(updated_evaluation)
+    if before_hash == after_hash:
+        raise AuditIntegrityError("A no-op candidate review cannot be audited.")
+    return append_audit_event(
+        audit_log,
+        AuditEventType.HUMAN_REVIEW_RECORDED,
+        role=role,
+        actor=updated_evaluation.last_edited_by,
+        occurred_at=updated_evaluation.last_edited_at,
+        inherit_role_audit=False,
+        artifact_model=updated_evaluation.model,
+        artifact_prompt_version=updated_evaluation.prompt_version,
+        metadata={
+            "candidate_id": updated_evaluation.candidate_id,
+            "evaluation_id": updated_evaluation.evaluation_id,
+            "evaluation_version": updated_evaluation.version,
+            "previous_evaluation_version": previous_evaluation.version,
+            "source_role_version": updated_evaluation.role_version,
+            "source_hiring_pack_id": updated_evaluation.hiring_pack_id,
+            "source_hiring_pack_version": updated_evaluation.hiring_pack_version,
+            "edited_fields": changed_fields,
+            "before_sha256": before_hash,
+            "after_sha256": after_hash,
+        },
+    )
+
+
 class JsonStorage:
     """Persist Pydantic models beneath one configured directory."""
 
@@ -536,8 +663,10 @@ class SessionStore:
     _HISTORY_FILE = "discovery_history.json"
     _AUDIT_FILE = "audit_log.json"
     _HIRING_PACK_FILE = "hiring_pack.json"
+    _CANDIDATE_EVALUATION_FILE = "candidate_evaluation.json"
     _VERSIONS_FOLDER = "role_versions"
     _HIRING_PACK_VERSIONS_FOLDER = "hiring_pack_versions"
+    _CANDIDATE_EVALUATIONS_FOLDER = "candidate_evaluations"
 
     def __init__(self, root: Path) -> None:
         self.storage = JsonStorage(root)
@@ -580,6 +709,7 @@ class SessionStore:
         messages: list[DiscoveryMessage],
         audit_log: AuditLog,
         hiring_pack: HiringPack | None = None,
+        candidate_evaluation: CandidateEvaluation | None = None,
     ) -> Path:
         """Atomically save each validated session file and preserve audit prefix."""
         folder = self._folder_name(session_id)
@@ -648,6 +778,15 @@ class SessionStore:
                     "Hiring pack does not trace to this session's role history."
                 )
             self.save_hiring_pack(session_id, hiring_pack)
+        if candidate_evaluation is not None:
+            if (
+                candidate_evaluation.role_id != role.role_id
+                or candidate_evaluation.role_version > role.version
+            ):
+                raise StorageValidationError(
+                    "Candidate evaluation does not trace to this session's role history."
+                )
+            self.save_candidate_evaluation(session_id, candidate_evaluation)
         self.storage.save(audit_path, audit_log)
         return self.root / folder
 
@@ -722,6 +861,131 @@ class SessionStore:
                 raise AuditIntegrityError("Audit log must remain append-only.")
         return self.storage.save(audit_path, audit_log)
 
+    def save_candidate_evaluation(
+        self,
+        session_id: str,
+        evaluation: CandidateEvaluation,
+    ) -> Path:
+        """Persist a current pointer and immutable per-evaluation versions."""
+        folder = self._folder_name(session_id)
+        if not evaluation.evaluation_id:
+            raise StorageValidationError("Candidate evaluation ID is required.")
+        evaluation_path = f"{folder}/{self._CANDIDATE_EVALUATION_FILE}"
+        version_path = (
+            f"{folder}/{self._CANDIDATE_EVALUATIONS_FOLDER}/"
+            f"{evaluation.evaluation_id}/"
+            f"candidate_evaluation_v{evaluation.version}.json"
+        )
+        try:
+            existing_version = self.storage.load(version_path, CandidateEvaluation)
+        except MissingStorageFile:
+            existing_version = None
+        if existing_version is not None:
+            if existing_version != evaluation:
+                raise AuditIntegrityError(
+                    "A candidate-evaluation version cannot be rewritten."
+                )
+            self.storage.save(evaluation_path, evaluation)
+            return self.storage._safe_path(evaluation_path)
+
+        try:
+            current = self.storage.load(evaluation_path, CandidateEvaluation)
+        except MissingStorageFile:
+            current = None
+        if current is not None and current.evaluation_id == evaluation.evaluation_id:
+            if current.version == evaluation.version:
+                if current != evaluation:
+                    raise AuditIntegrityError(
+                        "A candidate-evaluation version cannot be rewritten."
+                    )
+                return self.storage._safe_path(evaluation_path)
+            if (
+                evaluation.version != current.version + 1
+                or evaluation.parent_version != current.version
+            ):
+                raise AuditIntegrityError(
+                    "Candidate-evaluation versions must be appended sequentially."
+                )
+        self.storage.save(evaluation_path, evaluation)
+        self.storage.save(version_path, evaluation)
+        return self.storage._safe_path(evaluation_path)
+
+    def save_candidate_evaluation_and_audit(
+        self,
+        session_id: str,
+        evaluation: CandidateEvaluation,
+        audit_log: AuditLog,
+    ) -> Path:
+        """Save evaluation before audit and roll back if the audit write fails.
+
+        Each JSON replacement remains atomic. The scoped rollback covers
+        in-process failures between the two files so a successful assessment is
+        not retained without its matching append-only event.
+        """
+        folder = self._folder_name(session_id)
+        if not evaluation.evaluation_id:
+            raise StorageValidationError("Candidate evaluation ID is required.")
+        current_relative = f"{folder}/{self._CANDIDATE_EVALUATION_FILE}"
+        version_relative = (
+            f"{folder}/{self._CANDIDATE_EVALUATIONS_FOLDER}/"
+            f"{evaluation.evaluation_id}/"
+            f"candidate_evaluation_v{evaluation.version}.json"
+        )
+        try:
+            previous_current = self.storage.load(
+                current_relative, CandidateEvaluation
+            )
+        except MissingStorageFile:
+            previous_current = None
+        version_path = self.storage._safe_path(version_relative)
+        version_preexisted = version_path.is_file()
+
+        evaluation_path = self.save_candidate_evaluation(session_id, evaluation)
+        try:
+            self.save_audit_log(session_id, audit_log)
+        except Exception as audit_error:
+            rollback_errors: list[Exception] = []
+            try:
+                if previous_current is None:
+                    current_path = self.storage._safe_path(current_relative)
+                    if current_path.is_file():
+                        current_path.unlink()
+                else:
+                    self.storage.save(current_relative, previous_current)
+            except (OSError, StorageError) as exc:
+                rollback_errors.append(exc)
+            try:
+                if not version_preexisted and version_path.is_file():
+                    version_path.unlink()
+            except OSError as exc:
+                rollback_errors.append(exc)
+            if rollback_errors:
+                raise StorageError(
+                    "Audit persistence failed and evaluation rollback was incomplete."
+                ) from audit_error
+            raise
+        return evaluation_path
+
+    def load_candidate_evaluation_version(
+        self,
+        session_id: str,
+        evaluation_id: str,
+        version: int,
+    ) -> CandidateEvaluation:
+        """Load one immutable historical evaluation version."""
+        if not self._SESSION_ID_PATTERN.fullmatch(evaluation_id):
+            raise StoragePathError(
+                "Candidate evaluation id contains unsupported characters."
+            )
+        folder = self._folder_name(session_id)
+        return self.storage.load(
+            (
+                f"{folder}/{self._CANDIDATE_EVALUATIONS_FOLDER}/"
+                f"{evaluation_id}/candidate_evaluation_v{version}.json"
+            ),
+            CandidateEvaluation,
+        )
+
     def load_session(self, session_id: str) -> SessionSnapshot:
         """Load all required files and reject cross-version inconsistencies."""
         folder = self._folder_name(session_id)
@@ -738,6 +1002,13 @@ class SessionStore:
             )
         except MissingStorageFile:
             hiring_pack = None
+        try:
+            candidate_evaluation = self.storage.load(
+                f"{folder}/{self._CANDIDATE_EVALUATION_FILE}",
+                CandidateEvaluation,
+            )
+        except MissingStorageFile:
+            candidate_evaluation = None
         if (
             history.session_id != session_id
             or audit_log.session_id != session_id
@@ -758,6 +1029,18 @@ class SessionStore:
             raise StorageValidationError(
                 "Stored hiring pack does not trace to the session role history."
             )
+        if candidate_evaluation is not None and (
+            candidate_evaluation.role_id != role.role_id
+            or candidate_evaluation.role_version > role.version
+            or hiring_pack is None
+            or candidate_evaluation.hiring_pack_id != hiring_pack.hiring_pack_id
+            or candidate_evaluation.hiring_pack_version is None
+            or candidate_evaluation.hiring_pack_version > hiring_pack.version
+        ):
+            raise StorageValidationError(
+                "Stored candidate evaluation does not trace to session role and "
+                "hiring-pack history."
+            )
         state = WorkflowState(
             role_specification=role,
             current_stage=history.current_stage,
@@ -770,4 +1053,5 @@ class SessionStore:
             messages=history.messages,
             audit_log=audit_log,
             hiring_pack=hiring_pack,
+            candidate_evaluation=candidate_evaluation,
         )

@@ -7,6 +7,7 @@ nothing itself.
 
 from __future__ import annotations
 
+from datetime import UTC, datetime
 import platform
 import uuid
 from pathlib import Path
@@ -19,6 +20,13 @@ from src.discovery import (
     delete_requirement,
     edit_requirement,
     take_discovery_turn,
+)
+from src.evaluation import (
+    CandidateEvaluationValidationError,
+    EvaluationBlockedError,
+    NoCandidateEvaluationChangesError,
+    edit_and_persist_candidate_evaluation,
+    evaluate_and_persist_candidate,
 )
 from src.generation import (
     GenerationBlockedError,
@@ -34,8 +42,12 @@ from src.llm_client import LLMClientError, OpenRouterClient
 from src.models import (
     ApprovalSection,
     BasicRoleInfo,
+    CandidateEvaluation,
+    CandidateQuestionResponse,
+    CandidateResponseSet,
     DiscoverySemanticValidationError,
     EmploymentType,
+    EvidenceQuality,
     HiringPack,
     JobDescription,
     JobDescriptionCriterion,
@@ -130,7 +142,10 @@ def _nonempty_lines(value: str) -> list[str]:
 
 
 def _save_active_session(
-    *, hiring_pack: HiringPack, audit_log: AuditLog
+    *,
+    hiring_pack: HiringPack,
+    audit_log: AuditLog,
+    candidate_evaluation: CandidateEvaluation | None = None,
 ) -> None:
     """Persist the full UI snapshot after a pack or audit file has been saved."""
     state = st.session_state["workflow_state"]
@@ -143,7 +158,38 @@ def _save_active_session(
         messages=st.session_state["discovery_messages"],
         audit_log=audit_log,
         hiring_pack=hiring_pack,
+        candidate_evaluation=(
+            candidate_evaluation
+            if candidate_evaluation is not None
+            else st.session_state.get("candidate_evaluation")
+        ),
     )
+
+
+def _persist_result(
+    *,
+    hiring_pack: HiringPack,
+    audit_log: AuditLog,
+    candidate_evaluation: CandidateEvaluation | None = None,
+) -> None:
+    """Accept a persisted artefact and best-effort refresh the session snapshot."""
+    if candidate_evaluation is None:
+        st.session_state["hiring_pack"] = hiring_pack
+    else:
+        st.session_state["candidate_evaluation"] = candidate_evaluation
+    st.session_state["audit_log"] = audit_log
+    try:
+        _save_active_session(
+            hiring_pack=hiring_pack,
+            audit_log=audit_log,
+            candidate_evaluation=candidate_evaluation,
+        )
+    except StorageError as exc:
+        st.warning(
+            "The result and audit event were saved, but the full session "
+            f"snapshot could not be refreshed: {exc}"
+        )
+    st.rerun()
 
 
 with tabs[0]:
@@ -163,6 +209,7 @@ with tabs[0]:
     st.session_state.setdefault("discovery_messages", [])
     st.session_state.setdefault("audit_log", None)
     st.session_state.setdefault("hiring_pack", None)
+    st.session_state.setdefault("candidate_evaluation", None)
 
     with st.expander("Save or reload session"):
         current_state = st.session_state["workflow_state"]
@@ -190,6 +237,9 @@ with tabs[0]:
                             messages=st.session_state["discovery_messages"],
                             audit_log=audit_log,
                             hiring_pack=st.session_state["hiring_pack"],
+                            candidate_evaluation=st.session_state[
+                                "candidate_evaluation"
+                            ],
                         )
                 except StorageError as exc:
                     st.error(f"Session could not be saved: {exc}")
@@ -226,6 +276,9 @@ with tabs[0]:
                     st.session_state["discovery_messages"] = snapshot.messages
                     st.session_state["audit_log"] = snapshot.audit_log
                     st.session_state["hiring_pack"] = snapshot.hiring_pack
+                    st.session_state["candidate_evaluation"] = (
+                        snapshot.candidate_evaluation
+                    )
                     st.session_state["discovery_error"] = None
                     st.rerun()
 
@@ -325,6 +378,7 @@ with tabs[0]:
                         st.session_state["discovery_messages"] = messages
                         st.session_state["audit_log"] = audit_log
                         st.session_state["hiring_pack"] = None
+                        st.session_state["candidate_evaluation"] = None
                         st.session_state["discovery_error"] = None
                     st.rerun()
         else:
@@ -394,6 +448,7 @@ with tabs[0]:
                 st.session_state["discovery_messages"] = []
                 st.session_state["audit_log"] = None
                 st.session_state["hiring_pack"] = None
+                st.session_state["candidate_evaluation"] = None
                 st.rerun()
 
         if st.session_state["discovery_error"]:
@@ -824,19 +879,10 @@ with tabs[2]:
                 st.error(f"Hiring-pack generation could not be completed: {exc}")
                 st.caption("No unvalidated pack or generation audit event was accepted.")
             else:
-                st.session_state["hiring_pack"] = result.hiring_pack
-                st.session_state["audit_log"] = result.audit_log
-                try:
-                    _save_active_session(
-                        hiring_pack=result.hiring_pack,
-                        audit_log=result.audit_log,
-                    )
-                except StorageError as exc:
-                    st.warning(
-                        "The pack and audit event were saved, but the full session "
-                        f"snapshot could not be refreshed: {exc}"
-                    )
-                st.rerun()
+                _persist_result(
+                    hiring_pack=result.hiring_pack,
+                    audit_log=result.audit_log,
+                )
 
         pack = st.session_state["hiring_pack"]
         if pack is not None:
@@ -1049,19 +1095,10 @@ with tabs[2]:
                         ) as exc:
                             st.error(f"JD changes were not saved: {exc}")
                         else:
-                            st.session_state["hiring_pack"] = result.hiring_pack
-                            st.session_state["audit_log"] = result.audit_log
-                            try:
-                                _save_active_session(
-                                    hiring_pack=result.hiring_pack,
-                                    audit_log=result.audit_log,
-                                )
-                            except StorageError as exc:
-                                st.warning(
-                                    "The edit and audit event were saved, but the "
-                                    f"full session snapshot was not refreshed: {exc}"
-                                )
-                            st.rerun()
+                            _persist_result(
+                                hiring_pack=result.hiring_pack,
+                                audit_log=result.audit_log,
+                            )
 
             st.markdown("---")
             st.markdown(f"## Screening questions ({len(pack.screening_questions)})")
@@ -1208,20 +1245,10 @@ with tabs[2]:
                             ) as exc:
                                 st.error(f"Question changes were not saved: {exc}")
                             else:
-                                st.session_state["hiring_pack"] = result.hiring_pack
-                                st.session_state["audit_log"] = result.audit_log
-                                try:
-                                    _save_active_session(
-                                        hiring_pack=result.hiring_pack,
-                                        audit_log=result.audit_log,
-                                    )
-                                except StorageError as exc:
-                                    st.warning(
-                                        "The edit and audit event were saved, but "
-                                        "the full session snapshot was not refreshed: "
-                                        f"{exc}"
-                                    )
-                                st.rerun()
+                                _persist_result(
+                                    hiring_pack=result.hiring_pack,
+                                    audit_log=result.audit_log,
+                                )
 
             st.markdown("**Human-review guidance**")
             for value in pack.human_review_guidance:
@@ -1264,23 +1291,561 @@ with tabs[2]:
                     ) as exc:
                         st.error(f"Guidance changes were not saved: {exc}")
                     else:
-                        st.session_state["hiring_pack"] = result.hiring_pack
-                        st.session_state["audit_log"] = result.audit_log
-                        try:
-                            _save_active_session(
-                                hiring_pack=result.hiring_pack,
-                                audit_log=result.audit_log,
-                            )
-                        except StorageError as exc:
-                            st.warning(
-                                "The edit and audit event were saved, but the "
-                                f"full session snapshot was not refreshed: {exc}"
-                            )
-                        st.rerun()
+                        _persist_result(
+                            hiring_pack=result.hiring_pack,
+                            audit_log=result.audit_log,
+                        )
 
 with tabs[3]:
     st.subheader("Candidate Evidence")
-    st.info("Candidate evidence evaluation is reserved for Phase 7 and is not implemented.")
+    state = st.session_state["workflow_state"]
+    pack: HiringPack | None = st.session_state["hiring_pack"]
+    evaluation: CandidateEvaluation | None = st.session_state[
+        "candidate_evaluation"
+    ]
+    if state is None:
+        st.info("Define and approve a role before evaluating candidate evidence.")
+    elif pack is None:
+        role = state.role_specification
+        st.info(
+            f"Selected role: {role.basic_info.title or role.role_id} "
+            f"(version {role.version})."
+        )
+        st.warning("Generate a hiring pack before collecting candidate responses.")
+    else:
+        role = state.role_specification
+        role_columns = st.columns(3)
+        role_columns[0].metric(
+            "Selected role", role.basic_info.title or role.role_id
+        )
+        role_columns[1].metric(
+            "Approval", "Approved" if role.human_approved else "Not approved"
+        )
+        role_columns[2].metric(
+            "Hiring pack", f"{pack.hiring_pack_id} · v{pack.version}"
+        )
+        pack_stale = hiring_pack_is_stale(pack, role)
+        if pack_stale:
+            st.warning(
+                "This hiring pack is stale for the current role version. Candidate "
+                "evaluation is blocked until the matching approved role snapshot is "
+                "loaded or the pack is regenerated."
+            )
+        elif not role.human_approved:
+            st.warning("The selected role is not approved, so evaluation is blocked.")
+        else:
+            st.success(
+                f"Role version {role.version} and hiring-pack version "
+                f"{pack.version} are eligible for evidence review."
+            )
+
+        existing_source = (
+            evaluation.source_response_set
+            if evaluation is not None
+            and evaluation.source_response_set is not None
+            and evaluation.role_id == role.role_id
+            and evaluation.role_version == role.version
+            and evaluation.hiring_pack_id == pack.hiring_pack_id
+            and evaluation.hiring_pack_version == pack.version
+            else None
+        )
+        existing_answers = (
+            {
+                response.question_id: response.answer_text
+                for response in existing_source.responses
+            }
+            if existing_source is not None
+            else {}
+        )
+        with st.form(
+            f"candidate_responses_{role.role_id}_{role.version}_"
+            f"{pack.hiring_pack_id}_{pack.version}"
+        ):
+            candidate_id = st.text_input(
+                "Anonymous candidate identifier",
+                value=(
+                    existing_source.candidate_id
+                    if existing_source is not None
+                    else ""
+                ),
+                help=(
+                    "Use a pseudonymous reference, not a candidate name or email "
+                    "address."
+                ),
+            )
+            evaluation_actor = st.text_input(
+                "Evaluation actor",
+                value=role.approved_by or "",
+                help="Recorded in evaluation provenance and the append-only audit log.",
+            )
+            response_values: list[tuple[ScreeningQuestion, str]] = []
+            st.markdown("**Screening responses**")
+            for question in pack.screening_questions:
+                st.markdown(f"**{question.question_id}: {question.question}**")
+                st.caption(
+                    "Mapped requirements: " + ", ".join(question.requirement_ids)
+                )
+                answer = st.text_area(
+                    f"Candidate response for {question.question_id}",
+                    value=existing_answers.get(question.question_id, ""),
+                    key=(
+                        f"candidate_answer_{pack.hiring_pack_id}_{pack.version}_"
+                        f"{question.question_id}"
+                    ),
+                    label_visibility="collapsed",
+                )
+                response_values.append((question, answer))
+            evaluate_submitted = st.form_submit_button(
+                "Run evidence evaluation",
+                type="primary",
+                disabled=(
+                    pack_stale
+                    or not role.human_approved
+                    or not api_ready
+                    or not candidate_id.strip()
+                    or not evaluation_actor.strip()
+                ),
+            )
+
+        if not api_ready:
+            st.caption(
+                "OpenRouter must be configured to run a new evaluation. Existing "
+                "persisted evaluations remain reviewable without a provider call."
+            )
+
+        if evaluate_submitted:
+            response_by_question = (
+                {
+                    response.question_id: response
+                    for response in existing_source.responses
+                }
+                if existing_source is not None
+                else {}
+            )
+            responses = [
+                CandidateQuestionResponse(
+                    response_id=(
+                        response_by_question[question.question_id].response_id
+                        if question.question_id in response_by_question
+                        else f"response_{question.question_id}"
+                    ),
+                    question_id=question.question_id,
+                    answer_text=answer,
+                )
+                for question, answer in response_values
+            ]
+            same_source_content = (
+                existing_source is not None
+                and candidate_id.strip() == existing_source.candidate_id
+                and [
+                    (item.question_id, item.answer_text)
+                    for item in responses
+                ]
+                == [
+                    (item.question_id, item.answer_text)
+                    for item in existing_source.responses
+                ]
+            )
+            response_set = CandidateResponseSet(
+                response_set_id=(
+                    existing_source.response_set_id
+                    if same_source_content and existing_source is not None
+                    else f"response_set_{uuid.uuid4().hex}"
+                ),
+                candidate_id=candidate_id.strip(),
+                source_role_id=role.role_id,
+                source_role_version=role.version,
+                source_hiring_pack_id=pack.hiring_pack_id,
+                source_hiring_pack_version=pack.version,
+                submitted_at=(
+                    existing_source.submitted_at
+                    if same_source_content and existing_source is not None
+                    else datetime.now(UTC)
+                ),
+                responses=responses,
+            )
+            client = OpenRouterClient(settings)
+            session_id = st.session_state["session_id"] or uuid.uuid4().hex
+            st.session_state["session_id"] = session_id
+            try:
+                with st.spinner(
+                    "Extracting evidence and validating requirement assessments..."
+                ):
+                    result = evaluate_and_persist_candidate(
+                        role=role,
+                        hiring_pack=pack,
+                        response_set=response_set,
+                        llm_client=client,
+                        actor=evaluation_actor,
+                        session_id=session_id,
+                        session_store=SESSION_STORE,
+                        audit_log=_current_audit_log(role),
+                        existing_evaluation=(
+                            evaluation if same_source_content else None
+                        ),
+                    )
+            except (
+                CandidateEvaluationValidationError,
+                EvaluationBlockedError,
+                LLMClientError,
+                StorageError,
+                ValidationError,
+                ValueError,
+            ) as exc:
+                st.error(f"Candidate evaluation could not be completed: {exc}")
+                st.caption(
+                    "No partial or unvalidated evaluation and no successful "
+                    "assessment event were accepted."
+                )
+            else:
+                _persist_result(
+                    hiring_pack=pack,
+                    audit_log=result.audit_log,
+                    candidate_evaluation=result.evaluation,
+                )
+
+        evaluation = st.session_state["candidate_evaluation"]
+        if evaluation is not None:
+            source_is_current = (
+                evaluation.role_id == role.role_id
+                and evaluation.role_version == role.version
+                and evaluation.hiring_pack_id == pack.hiring_pack_id
+                and evaluation.hiring_pack_version == pack.version
+            )
+            if not source_is_current:
+                st.warning(
+                    "The displayed evaluation is historical. It remains readable, "
+                    "but review edits are disabled because its source role or hiring "
+                    "pack is not current."
+                )
+            st.markdown("---")
+            st.markdown(
+                f"## Evaluation for {evaluation.candidate_id} "
+                f"(version {evaluation.version})"
+            )
+            provenance_columns = st.columns(4)
+            provenance_columns[0].metric(
+                "Overall confidence",
+                (
+                    f"{evaluation.overall_confidence:.0%}"
+                    if evaluation.overall_confidence is not None
+                    else "Not available"
+                ),
+            )
+            provenance_columns[1].metric(
+                "Requirement coverage",
+                (
+                    f"{evaluation.requirement_coverage:.0%}"
+                    if evaluation.requirement_coverage is not None
+                    else "Not available"
+                ),
+            )
+            provenance_columns[2].metric(
+                "Must-have coverage",
+                (
+                    f"{evaluation.must_have_coverage:.0%}"
+                    if evaluation.must_have_coverage is not None
+                    else "Not available"
+                ),
+            )
+            provenance_columns[3].metric(
+                "Review routing",
+                (
+                    _human_label(evaluation.routing.value)
+                    if evaluation.routing is not None
+                    else "Human review"
+                ),
+            )
+            evaluated_label = (
+                evaluation.evaluated_at.isoformat()
+                if evaluation.evaluated_at
+                else "at an unreported time"
+            )
+            st.caption(
+                f"Source role {evaluation.role_id} v{evaluation.role_version}; "
+                f"hiring pack {evaluation.hiring_pack_id} "
+                f"v{evaluation.hiring_pack_version}; evaluated "
+                f"{evaluated_label} "
+                f"by {evaluation.evaluated_by or 'an unreported actor'}; model "
+                f"{evaluation.model or 'not reported'}; prompt "
+                f"{evaluation.prompt_version or 'not reported'}."
+            )
+            if evaluation.prompt_injection_detected:
+                st.warning(
+                    "Instruction-like candidate text was detected and isolated as "
+                    "untrusted data. It did not change the schema, IDs, rubric, or "
+                    "missing-evidence rules, and confidence was reduced."
+                )
+            if evaluation.human_edited and evaluation.last_edited_at:
+                st.caption(
+                    f"Last human review edit: "
+                    f"{evaluation.last_edited_at.isoformat()} by "
+                    f"{evaluation.last_edited_by}."
+                )
+
+            st.markdown("### Extracted evidence")
+            if not evaluation.evidence_items:
+                st.caption("No requirement-relevant evidence was extracted.")
+            for evidence in evaluation.evidence_items:
+                with st.expander(
+                    f"{evidence.evidence_id} · {evidence.requirement_id} · "
+                    f"{_human_label(evidence.evidence_quality.value)}"
+                ):
+                    st.markdown(f"> {evidence.quote}")
+                    st.caption(
+                        f"Source: {evidence.source_id}; question: "
+                        f"{evidence.source_question_id or 'supporting evidence'}; "
+                        f"type: {_human_label(evidence.evidence_type.value)}; "
+                        f"ownership: {_human_label(evidence.ownership.value)}; "
+                        f"verification: "
+                        f"{_human_label(evidence.verification_status.value)}."
+                    )
+                    st.write(evidence.evaluator_explanation or "")
+
+            st.markdown("### Requirement assessments")
+            for assessment_index, assessment in enumerate(
+                evaluation.assessments
+            ):
+                priority = (
+                    _human_label(assessment.requirement_priority.value)
+                    if assessment.requirement_priority is not None
+                    else "Unspecified"
+                )
+                with st.expander(
+                    f"{assessment.requirement_id}: "
+                    f"{assessment.requirement_label or 'Requirement'} · "
+                    f"{assessment.score}/5 · {priority}",
+                    expanded=assessment_index == 0,
+                ):
+                    assessment_columns = st.columns(3)
+                    assessment_columns[0].metric("Score", f"{assessment.score}/5")
+                    assessment_columns[1].metric(
+                        "Evidence quality",
+                        _human_label(assessment.evidence_quality.value),
+                    )
+                    assessment_columns[2].metric(
+                        "Confidence", f"{assessment.confidence:.0%}"
+                    )
+                    st.caption(
+                        "Mapped questions: "
+                        + ", ".join(assessment.relevant_question_ids)
+                    )
+                    st.markdown("**Matched rubric anchor**")
+                    st.write(
+                        f"{assessment.rubric_question_id}: "
+                        f"{assessment.rubric_anchor}"
+                    )
+                    for label, values in (
+                        ("Strengths", assessment.strengths),
+                        ("Concerns", assessment.concerns),
+                        ("Missing evidence", assessment.missing_evidence),
+                        (
+                            "Contradictory evidence",
+                            assessment.contradictory_evidence,
+                        ),
+                    ):
+                        st.markdown(f"**{label}**")
+                        if values:
+                            for value in values:
+                                st.write(f"- {value}")
+                        else:
+                            st.caption("None recorded.")
+                    st.markdown("**Reviewer explanation**")
+                    st.write(
+                        assessment.reviewer_explanation
+                        or assessment.reasoning_summary
+                        or "No explanation supplied."
+                    )
+                    st.markdown("**Recommended follow-up**")
+                    st.write(assessment.human_follow_up or "No follow-up supplied.")
+
+                    if source_is_current:
+                        with st.form(
+                            f"review_assessment_{evaluation.evaluation_id}_"
+                            f"{evaluation.version}_{assessment.requirement_id}"
+                        ):
+                            reviewer = st.text_input("Reviewer name")
+                            reviewed_score = st.slider(
+                                "Reviewed score",
+                                min_value=0,
+                                max_value=5,
+                                value=assessment.score,
+                            )
+                            quality_options = list(EvidenceQuality)
+                            reviewed_quality = st.selectbox(
+                                "Reviewed evidence quality",
+                                options=quality_options,
+                                index=quality_options.index(
+                                    assessment.evidence_quality
+                                ),
+                                format_func=lambda item: _human_label(item.value),
+                            )
+                            reviewed_confidence = st.slider(
+                                "Reviewed confidence",
+                                min_value=0.0,
+                                max_value=1.0,
+                                value=float(assessment.confidence),
+                                step=0.05,
+                                help=(
+                                    "Confidence is certainty in the evidence "
+                                    "assessment, not candidate quality."
+                                ),
+                            )
+                            reviewed_strengths = st.text_area(
+                                "Strengths — one per line",
+                                value="\n".join(assessment.strengths),
+                            )
+                            reviewed_concerns = st.text_area(
+                                "Concerns — one per line",
+                                value="\n".join(assessment.concerns),
+                            )
+                            reviewed_missing = st.text_area(
+                                "Missing evidence — one per line",
+                                value="\n".join(assessment.missing_evidence),
+                            )
+                            reviewed_contradictions = st.text_area(
+                                "Contradictions — one per line",
+                                value="\n".join(
+                                    assessment.contradictory_evidence
+                                ),
+                            )
+                            reviewed_follow_up = st.text_area(
+                                "Recommended follow-up",
+                                value=assessment.human_follow_up or "",
+                            )
+                            reviewed_explanation = st.text_area(
+                                "Reviewer-facing explanation",
+                                value=(
+                                    assessment.reviewer_explanation
+                                    or assessment.reasoning_summary
+                                    or ""
+                                ),
+                            )
+                            evidence_relevance: dict[str, float] = {}
+                            evidence_qualities: dict[str, EvidenceQuality] = {}
+                            for evidence_id in assessment.evidence_item_ids:
+                                evidence_item = next(
+                                    item
+                                    for item in evaluation.evidence_items
+                                    if item.evidence_id == evidence_id
+                                )
+                                evidence_relevance[evidence_id] = st.slider(
+                                    f"Relevance · {evidence_id}",
+                                    min_value=0.0,
+                                    max_value=1.0,
+                                    value=float(evidence_item.relevance or 0.0),
+                                    step=0.05,
+                                )
+                                evidence_qualities[evidence_id] = st.selectbox(
+                                    f"Evidence quality · {evidence_id}",
+                                    options=quality_options,
+                                    index=quality_options.index(
+                                        evidence_item.evidence_quality
+                                    ),
+                                    format_func=lambda item: _human_label(
+                                        item.value
+                                    ),
+                                )
+                            save_review = st.form_submit_button(
+                                "Save human review",
+                                disabled=not reviewer.strip(),
+                            )
+
+                        if save_review:
+                            updated_assessments = list(evaluation.assessments)
+                            updated_assessments[assessment_index] = (
+                                assessment.model_copy(
+                                    update={
+                                        "score": reviewed_score,
+                                        "confidence": reviewed_confidence,
+                                        "evidence_quality": reviewed_quality,
+                                        "strengths": _nonempty_lines(
+                                            reviewed_strengths
+                                        ),
+                                        "concerns": _nonempty_lines(
+                                            reviewed_concerns
+                                        ),
+                                        "missing_evidence": _nonempty_lines(
+                                            reviewed_missing
+                                        ),
+                                        "contradictory_evidence": (
+                                            _nonempty_lines(
+                                                reviewed_contradictions
+                                            )
+                                        ),
+                                        "human_follow_up": (
+                                            reviewed_follow_up.strip() or None
+                                        ),
+                                        "reasoning_summary": (
+                                            reviewed_explanation.strip() or None
+                                        ),
+                                        "reviewer_explanation": (
+                                            reviewed_explanation.strip() or None
+                                        ),
+                                    }
+                                )
+                            )
+                            updated_evidence = list(evaluation.evidence_items)
+                            for evidence_index, evidence_item in enumerate(
+                                updated_evidence
+                            ):
+                                if evidence_item.evidence_id in evidence_relevance:
+                                    updated_evidence[evidence_index] = (
+                                        evidence_item.model_copy(
+                                            update={
+                                                "relevance": evidence_relevance[
+                                                    evidence_item.evidence_id
+                                                ],
+                                                "evidence_quality": (
+                                                    evidence_qualities[
+                                                        evidence_item.evidence_id
+                                                    ]
+                                                ),
+                                            }
+                                        )
+                                    )
+                            try:
+                                result = edit_and_persist_candidate_evaluation(
+                                    evaluation=evaluation,
+                                    role=role,
+                                    hiring_pack=pack,
+                                    editor=reviewer,
+                                    session_id=st.session_state["session_id"],
+                                    session_store=SESSION_STORE,
+                                    audit_log=_current_audit_log(role),
+                                    evidence_items=updated_evidence,
+                                    assessments=updated_assessments,
+                                )
+                            except NoCandidateEvaluationChangesError:
+                                st.info(
+                                    "No review content changed, so no audit event "
+                                    "was recorded."
+                                )
+                            except (
+                                CandidateEvaluationValidationError,
+                                StorageError,
+                                ValidationError,
+                                ValueError,
+                            ) as exc:
+                                st.error(f"Human review was not saved: {exc}")
+                            else:
+                                _persist_result(
+                                    hiring_pack=pack,
+                                    audit_log=result.audit_log,
+                                    candidate_evaluation=result.evaluation,
+                                )
+
+            st.markdown("### Overall reviewer guidance")
+            for guidance in evaluation.reviewer_guidance:
+                st.write(f"- {guidance}")
+            if evaluation.human_follow_ups:
+                st.markdown("**Recommended follow-up questions**")
+                for follow_up in evaluation.human_follow_ups:
+                    st.write(f"- {follow_up}")
+            if evaluation.contradictions:
+                st.markdown("**Cross-response contradictions**")
+                for contradiction in evaluation.contradictions:
+                    st.write(f"- {contradiction}")
 
 with tabs[4]:
     st.subheader("System Status")

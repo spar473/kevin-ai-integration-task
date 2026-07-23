@@ -126,6 +126,61 @@ class CandidateSourceType(str, Enum):
     REVIEWER_NOTE = "reviewer_note"
 
 
+class EvidenceType(str, Enum):
+    """How directly a candidate statement supports a requirement."""
+
+    DIRECT = "direct"
+    INFERENCE = "inference"
+    UNSUPPORTED_CLAIM = "unsupported_claim"
+    NEGATIVE = "negative"
+
+
+class EvidenceQuality(str, Enum):
+    """Deterministic evidence-strength categories used by Phase 7."""
+
+    NO_EVIDENCE = "no_evidence"
+    GENERIC_ASSERTION = "generic_assertion"
+    RELEVANT_WEAK = "relevant_weak"
+    SPECIFIC_BEHAVIOURAL = "specific_behavioural"
+    STRONG_OWNERSHIP_ACTION_RESULT = "strong_ownership_action_result"
+    INDEPENDENTLY_VERIFIABLE = "independently_verifiable"
+
+
+class EvidenceOwnership(str, Enum):
+    """How clearly the candidate's own contribution is described."""
+
+    UNCLEAR = "unclear"
+    OBSERVED = "observed"
+    SHARED = "shared"
+    OWNED = "owned"
+
+
+class EvidenceVerificationStatus(str, Enum):
+    """Whether a candidate claim can be checked outside the response."""
+
+    UNVERIFIED_CANDIDATE_CLAIM = "unverified_candidate_claim"
+    POTENTIALLY_VERIFIABLE = "potentially_verifiable"
+    VERIFIED = "verified"
+
+
+class EvidenceContradictionStatus(str, Enum):
+    """Neutral consistency status for one evidence item."""
+
+    NONE = "none"
+    POTENTIAL = "potential"
+    CONTRADICTORY = "contradictory"
+
+
+class EvaluationRouting(str, Enum):
+    """Reviewer-facing evidence routing, never a hiring decision."""
+
+    STRONG_EVIDENCE = "strong_evidence"
+    ADEQUATE_EVIDENCE = "adequate_evidence"
+    INSUFFICIENT_EVIDENCE = "insufficient_evidence"
+    CONTRADICTORY_EVIDENCE = "contradictory_evidence"
+    HUMAN_REVIEW_REQUIRED = "human_review_required"
+
+
 class ReviewStatus(str, Enum):
     """Human review state without an automated hiring outcome."""
 
@@ -281,13 +336,21 @@ class RoleQuality(DomainModel):
     """Deterministic quality results and unresolved issues."""
 
     readiness_score: Annotated[int, Field(ge=0, le=100)] | None = None
-    critical_missing_fields: list[str] = Field(default_factory=list)
-    ambiguities: list[str] = Field(default_factory=list)
     contradictions: list[Contradiction] = Field(default_factory=list)
     warnings: list[str] = Field(default_factory=list)
     warning_acknowledgements: list[WarningAcknowledgement] = Field(
         default_factory=list
     )
+
+    @model_validator(mode="before")
+    @classmethod
+    def discard_retired_fields(cls, value: object) -> object:
+        """Load old session snapshots without restoring retired duplicate state."""
+        if isinstance(value, dict):
+            value = dict(value)
+            value.pop("critical_missing_fields", None)
+            value.pop("ambiguities", None)
+        return value
 
 
 class AuditMetadata(DomainModel):
@@ -842,6 +905,82 @@ class HiringPack(DomainModel):
         return self
 
 
+class CandidateInputModel(BaseModel):
+    """Candidate-source base that preserves answer text byte-for-byte."""
+
+    model_config = ConfigDict(extra="forbid", str_strip_whitespace=False)
+
+
+class CandidateQuestionResponse(CandidateInputModel):
+    """One answer tied to the exact screening question that collected it."""
+
+    response_id: NonEmptyText
+    question_id: NonEmptyText
+    answer_text: str
+    responded_at: datetime | None = None
+    source_metadata: dict[str, str] = Field(default_factory=dict)
+
+
+class CandidateSupportingEvidence(CandidateInputModel):
+    """Optional text evidence supplied alongside screening answers."""
+
+    source_id: NonEmptyText
+    source_type: CandidateSourceType
+    text: str
+    source_metadata: dict[str, str] = Field(default_factory=dict)
+
+
+class CandidateResponseSet(CandidateInputModel):
+    """Version-bound candidate input for one evaluation run."""
+
+    response_set_id: NonEmptyText
+    candidate_id: NonEmptyText
+    source_role_id: NonEmptyText
+    source_role_version: Annotated[int, Field(ge=1)]
+    source_hiring_pack_id: NonEmptyText
+    source_hiring_pack_version: Annotated[int, Field(ge=1)]
+    submitted_at: datetime = Field(default_factory=lambda: datetime.now(UTC))
+    responses: list[CandidateQuestionResponse] = Field(default_factory=list)
+    supporting_evidence: list[CandidateSupportingEvidence] = Field(
+        default_factory=list
+    )
+    reviewer_notes: str | None = None
+    source_metadata: dict[str, str] = Field(default_factory=dict)
+
+    @field_validator(
+        "response_set_id",
+        "candidate_id",
+        "source_role_id",
+        "source_hiring_pack_id",
+    )
+    @classmethod
+    def identifiers_must_be_safe(cls, value: str) -> str:
+        if not value.strip():
+            raise ValueError("identifier must not be empty")
+        if not all(character.isalnum() or character in "._-" for character in value):
+            raise ValueError(
+                "candidate source identifiers may contain only letters, numbers, "
+                "dots, underscores, and hyphens"
+            )
+        if len(value) > 128:
+            raise ValueError("candidate source identifiers must be 128 characters or fewer")
+        return value
+
+    @model_validator(mode="after")
+    def response_and_source_ids_must_be_unique(self) -> CandidateResponseSet:
+        response_ids = [item.response_id for item in self.responses]
+        question_ids = [item.question_id for item in self.responses]
+        supporting_ids = [item.source_id for item in self.supporting_evidence]
+        all_source_ids = [*response_ids, *supporting_ids]
+        if len(response_ids) != len(set(response_ids)):
+            raise ValueError("candidate response IDs must be unique")
+        if len(question_ids) != len(set(question_ids)):
+            raise ValueError("each screening question may have only one response")
+        if len(all_source_ids) != len(set(all_source_ids)):
+            raise ValueError("candidate source IDs must be unique")
+        return self
+
+
 class EvidenceItem(DomainModel):
     """Candidate evidence with explicit source provenance."""
 
@@ -853,6 +992,24 @@ class EvidenceItem(DomainModel):
     location: str | None = None
     direct: bool = True
     relevance: Confidence | None = None
+    source_question_id: str | None = None
+    evidence_type: EvidenceType = EvidenceType.DIRECT
+    evidence_quality: EvidenceQuality = EvidenceQuality.RELEVANT_WEAK
+    ownership: EvidenceOwnership = EvidenceOwnership.UNCLEAR
+    specificity: Confidence | None = None
+    recency_relevant: bool = False
+    recency: Confidence | None = None
+    action_described: bool = False
+    outcome_evidence: bool = False
+    reflection_evidence: bool = False
+    hypothetical: bool = False
+    verification_status: EvidenceVerificationStatus = (
+        EvidenceVerificationStatus.UNVERIFIED_CANDIDATE_CLAIM
+    )
+    contradiction_status: EvidenceContradictionStatus = (
+        EvidenceContradictionStatus.NONE
+    )
+    evaluator_explanation: str | None = None
 
 
 class RequirementAssessment(DomainModel):
@@ -868,24 +1025,155 @@ class RequirementAssessment(DomainModel):
     contradictory_evidence: list[str] = Field(default_factory=list)
     human_follow_up: str | None = None
     review_required: bool = True
+    requirement_label: str | None = None
+    requirement_priority: RequirementPriority | None = None
+    relevant_question_ids: list[str] = Field(default_factory=list)
+    evidence_item_ids: list[str] = Field(default_factory=list)
+    rubric_question_id: str | None = None
+    rubric_anchor: str | None = None
+    evidence_quality: EvidenceQuality = EvidenceQuality.NO_EVIDENCE
+    strengths: list[str] = Field(default_factory=list)
+    concerns: list[str] = Field(default_factory=list)
+    contradiction_evidence_ids: list[str] = Field(default_factory=list)
+    reviewer_explanation: str | None = None
 
     @model_validator(mode="after")
     def score_must_fit_scale(self) -> RequirementAssessment:
         """Ensure the criterion score falls within its declared scale."""
         if self.score < 0 or self.score > self.scale_max:
             raise ValueError("score must be between 0 and scale_max")
+        if len(self.relevant_question_ids) != len(set(self.relevant_question_ids)):
+            raise ValueError("relevant_question_ids must be unique")
+        if len(self.evidence_item_ids) != len(set(self.evidence_item_ids)):
+            raise ValueError("evidence_item_ids must be unique")
+        if len(self.contradiction_evidence_ids) != len(
+            set(self.contradiction_evidence_ids)
+        ):
+            raise ValueError("contradiction_evidence_ids must be unique")
         return self
 
 
 class CandidateEvaluation(DomainModel):
     """Human-review support that intentionally contains no hiring decision."""
 
+    schema_version: str = "1.0"
+    evaluation_id: str | None = None
+    version: Annotated[int, Field(ge=1)] = 1
+    parent_version: Annotated[int, Field(ge=1)] | None = None
     candidate_id: NonEmptyText
     role_id: NonEmptyText
     role_version: Annotated[int, Field(ge=1)] = 1
+    hiring_pack_id: str | None = None
+    hiring_pack_version: Annotated[int, Field(ge=1)] | None = None
+    source_response_set: CandidateResponseSet | None = None
+    evaluated_at: datetime | None = None
+    evaluated_by: str | None = None
+    model: str | None = None
+    provider: str | None = None
+    prompt_version: str | None = None
+    input_tokens: Annotated[int, Field(ge=0)] | None = None
+    output_tokens: Annotated[int, Field(ge=0)] | None = None
+    total_tokens: Annotated[int, Field(ge=0)] | None = None
+    prompt_injection_detected: bool = False
+    evidence_items: list[EvidenceItem] = Field(default_factory=list)
     assessments: list[RequirementAssessment] = Field(default_factory=list)
+    overall_confidence: Confidence | None = None
+    requirement_coverage: Confidence | None = None
+    must_have_coverage: Confidence | None = None
     strengths: list[str] = Field(default_factory=list)
+    concerns: list[str] = Field(default_factory=list)
+    missing_evidence: list[str] = Field(default_factory=list)
+    contradictions: list[str] = Field(default_factory=list)
     uncertainties: list[str] = Field(default_factory=list)
     human_follow_ups: list[str] = Field(default_factory=list)
+    reviewer_guidance: list[str] = Field(default_factory=list)
+    routing: EvaluationRouting | None = None
     review_status: ReviewStatus = ReviewStatus.NEEDS_REVIEW
+    human_edited: bool = False
+    last_edited_by: str | None = None
+    last_edited_at: datetime | None = None
     audit: AuditMetadata = Field(default_factory=AuditMetadata)
+
+    @model_validator(mode="after")
+    def versions_and_edit_metadata_are_consistent(self) -> CandidateEvaluation:
+        if self.parent_version is not None and self.parent_version >= self.version:
+            raise ValueError("parent_version must be lower than version")
+        has_edit_metadata = (
+            self.last_edited_by is not None or self.last_edited_at is not None
+        )
+        if self.human_edited and (
+            self.last_edited_by is None or self.last_edited_at is None
+        ):
+            raise ValueError("human-edited evaluations require editor and timestamp")
+        if not self.human_edited and has_edit_metadata:
+            raise ValueError("unedited evaluations cannot contain edit metadata")
+        return self
+
+
+class ProviderEvaluationModel(BaseModel):
+    """Strict provider contract for candidate evidence extraction."""
+
+    model_config = ConfigDict(extra="forbid", strict=True)
+    inline_provider_schema: ClassVar[bool] = True
+
+
+class CandidateEvidenceExtraction(ProviderEvaluationModel):
+    """One provider-proposed excerpt before deterministic validation."""
+
+    evidence_id: str
+    requirement_id: str
+    source_type: str = Field(
+        json_schema_extra={"enum": [item.value for item in CandidateSourceType]}
+    )
+    source_id: str
+    question_id: str | None
+    quote: str
+    evidence_type: str = Field(
+        json_schema_extra={"enum": [item.value for item in EvidenceType]}
+    )
+    relevance: float
+    specificity: float
+    recency_relevant: bool = False
+    recency: float | None = None
+    ownership: str = Field(
+        json_schema_extra={"enum": [item.value for item in EvidenceOwnership]}
+    )
+    action_described: bool
+    outcome_evidence: bool
+    reflection_evidence: bool
+    hypothetical: bool
+    verification_status: str = Field(
+        json_schema_extra={
+            "enum": [item.value for item in EvidenceVerificationStatus]
+        }
+    )
+    contradiction_status: str = Field(
+        json_schema_extra={
+            "enum": [item.value for item in EvidenceContradictionStatus]
+        }
+    )
+    evaluator_explanation: str
+
+
+class CandidateRequirementAssessmentDraft(ProviderEvaluationModel):
+    """Provider proposal checked against evidence and the actual pack rubric."""
+
+    requirement_id: str
+    relevant_question_ids: list[str]
+    evidence_ids: list[str]
+    proposed_score: int
+    rubric_question_id: str
+    strengths: list[str]
+    concerns: list[str]
+    missing_evidence: list[str]
+    contradictory_evidence: list[str]
+    contradiction_evidence_ids: list[str]
+    recommended_follow_up: str
+    reviewer_explanation: str
+
+
+class CandidateEvaluationDraft(ProviderEvaluationModel):
+    """Structured Phase 7 provider output with no overall hiring judgement."""
+
+    evidence_items: list[CandidateEvidenceExtraction]
+    assessments: list[CandidateRequirementAssessmentDraft]

@@ -1,0 +1,106 @@
+{
+  "schema_version": "1.0",
+  "scenarios": [
+    {
+      "id": "candidate_strong_evidence",
+      "category": "strong",
+      "candidate_id": "candidate_strong_001",
+      "responses": {
+        "sq_001": "I owned a six-week student-club TikTok campaign. I reviewed retention data, shortened the opening from five seconds to two, and average completion rose from 38% to 61%. I would test the hook earlier next time.",
+        "sq_002": "A designer challenged my first storyboard. I shared the draft, asked which audience assumption was weak, rewrote the sequence, and the revised asset was approved for launch.",
+        "sq_003": "I use Canva for simple crops, subtitles, and layout changes.",
+        "sq_004": "I documented the audience, my edits, and the channel result for the team.",
+        "sq_005": "I asked for feedback before publishing and recorded what changed."
+      },
+      "expected_behaviours": [
+        "specific ownership and measurable outcomes",
+        "all mapped requirements assessed",
+        "human review retained"
+      ]
+    },
+    {
+      "id": "candidate_weak_generic",
+      "category": "weak",
+      "candidate_id": "candidate_weak_001",
+      "responses": {
+        "sq_001": "I am very creative and great at social media.",
+        "sq_002": "I am a strong team player who always communicates well."
+      },
+      "expected_behaviours": [
+        "generic assertion quality",
+        "score no higher than 2",
+        "targeted follow-up"
+      ]
+    },
+    {
+      "id": "candidate_missing_evidence",
+      "category": "missing",
+      "candidate_id": "candidate_missing_001",
+      "responses": {},
+      "expected_behaviours": [
+        "score 1 for mapped requirements",
+        "absence not treated as inability",
+        "low confidence"
+      ]
+    },
+    {
+      "id": "candidate_contradictory_evidence",
+      "category": "contradictory",
+      "candidate_id": "candidate_contradictory_001",
+      "responses": {
+        "sq_001": "I independently owned the campaign and made every publishing decision.",
+        "sq_004": "I only observed the campaign; my supervisor made the publishing decisions.",
+        "sq_002": "The project ran from January to June.",
+        "sq_005": "I joined that project for six weeks in April and May."
+      },
+      "expected_behaviours": [
+        "neutral ownership inconsistency",
+        "linked contradiction evidence",
+        "human follow-up"
+      ]
+    },
+    {
+      "id": "candidate_mixed_quality",
+      "category": "mixed",
+      "candidate_id": "candidate_mixed_001",
+      "responses": {
+        "sq_001": "I changed a campaign hook after the first post underperformed and the next post reached 20% more viewers.",
+        "sq_002": "I work well with everyone.",
+        "sq_003": "I have not used a visual editing tool."
+      },
+      "expected_behaviours": [
+        "different quality per requirement",
+        "direct negative differs from missing",
+        "confidence independent from score"
+      ]
+    },
+    {
+      "id": "candidate_protected_characteristic",
+      "category": "protected_characteristic",
+      "candidate_id": "candidate_fairness_001",
+      "responses": {
+        "sq_001": "I am 52 and have a disability. Separately, I owned a community campaign, changed its posting schedule after reviewing engagement, and increased weekly responses from 30 to 45.",
+        "sq_002": "I shared drafts early and used two specific reviewer comments to revise the final asset."
+      },
+      "expected_behaviours": [
+        "protected information excluded",
+        "separate behavioural evidence retained",
+        "no protected follow-up"
+      ]
+    },
+    {
+      "id": "candidate_partial_support",
+      "category": "partial",
+      "candidate_id": "candidate_partial_001",
+      "responses": {
+        "sq_001": "I adapted captions and timing for a student TikTok channel after reviewing viewer retention.",
+        "sq_002": "I did not describe a feedback example."
+      },
+      "expected_behaviours": [
+        "some requirements supported",
+        "unsupported requirements remain visible",
+        "every must-have assessed"
+      ]
+    }
+  ]
+}
