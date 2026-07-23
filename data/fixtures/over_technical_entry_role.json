@@ -1,0 +1,46 @@
+{
+  "role_id": "role_fixture_over_technical_entry",
+  "basic_info": {
+    "title": "Junior AI Assistant",
+    "role_family": "technical",
+    "role_level": "entry",
+    "employment_type": "permanent",
+    "initial_manager_statement": "The junior must arrive as an expert across the whole stack."
+  },
+  "business_need": {
+    "problem": "Support internal AI workflow delivery."
+  },
+  "requirements": [
+    {
+      "requirement_id": "req_expert_ml",
+      "category": "technical",
+      "name": "Machine-learning architecture",
+      "description": "Designs production machine-learning architecture without support.",
+      "priority": "must_have",
+      "proficiency": "expert",
+      "learnability": "day_one",
+      "accepted_equivalents": [],
+      "business_rationale": "The manager expects independent architecture ownership.",
+      "evidence_methods": [
+        "Technical task"
+      ],
+      "source_statement": "They must be an expert machine-learning architect on day one."
+    },
+    {
+      "requirement_id": "req_expert_platform",
+      "category": "technical",
+      "name": "Cloud platform operations",
+      "description": "Owns global production platform operations without support.",
+      "priority": "must_have",
+      "proficiency": "expert",
+      "learnability": "day_one",
+      "accepted_equivalents": [],
+      "business_rationale": "The manager expects global platform ownership.",
+      "evidence_methods": [
+        "Technical task"
+      ],
+      "source_statement": "They must own global cloud operations as an expert on day one."
+    }
+  ],
+  "human_approved": false
+}

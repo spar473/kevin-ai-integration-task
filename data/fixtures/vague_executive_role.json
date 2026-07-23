@@ -1,0 +1,14 @@
+{
+  "role_id": "role_fixture_vague_executive",
+  "basic_info": {
+    "title": "Executive Superstar",
+    "role_family": "executive",
+    "role_level": "executive",
+    "employment_type": "permanent",
+    "initial_manager_statement": "I need a superstar who can do a bit of everything."
+  },
+  "business_need": {
+    "problem": "We need a superstar who can do a bit of everything."
+  },
+  "human_approved": false
+}

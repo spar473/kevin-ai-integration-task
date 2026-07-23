@@ -1,0 +1,59 @@
+{
+  "role_id": "role_fixture_conflicting_inputs",
+  "basic_info": {
+    "title": "Campaign Coordinator",
+    "role_family": "marketing",
+    "role_level": "entry",
+    "employment_type": "permanent"
+  },
+  "business_need": {
+    "problem": "Coordinate weekly campaign delivery."
+  },
+  "requirements": [
+    {
+      "requirement_id": "req_coord_working",
+      "category": "domain",
+      "name": "Campaign coordination",
+      "description": "Coordinates assigned campaign tasks with support.",
+      "priority": "must_have",
+      "proficiency": "working",
+      "learnability": "day_one",
+      "accepted_equivalents": [],
+      "business_rationale": "Weekly campaign work needs a coordinator.",
+      "evidence_methods": [
+        "Screening response"
+      ],
+      "source_statement": "This is entry level and the manager will support them."
+    },
+    {
+      "requirement_id": "req_coord_expert",
+      "category": "domain",
+      "name": "Campaign coordination",
+      "description": "Sets global campaign strategy without support.",
+      "priority": "must_have",
+      "proficiency": "expert",
+      "learnability": "day_one",
+      "accepted_equivalents": [],
+      "business_rationale": "A second manager expects independent global strategy.",
+      "evidence_methods": [
+        "Screening response"
+      ],
+      "source_statement": "They must independently set global strategy from day one."
+    }
+  ],
+  "quality": {
+    "contradictions": [
+      {
+        "contradiction_id": "contradiction_manager_scope",
+        "description": "Managers disagree on supported coordination versus independent global strategy.",
+        "severity": "high",
+        "source_statements": [
+          "This is entry level and the manager will support them.",
+          "They must independently set global strategy from day one."
+        ],
+        "resolved": false
+      }
+    ]
+  },
+  "human_approved": false
+}

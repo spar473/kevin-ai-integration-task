@@ -1,0 +1,112 @@
+{
+  "role_id": "role_fixture_marketing_intern",
+  "version": 2,
+  "parent_version": 1,
+  "review_status": "approved",
+  "basic_info": {
+    "title": "Marketing Intern",
+    "role_family": "marketing",
+    "role_level": "intern",
+    "employment_type": "internship",
+    "division": "ZURU Edge",
+    "team": "Brand Marketing",
+    "location": "Auckland",
+    "work_arrangement": "On-site"
+  },
+  "business_need": {
+    "problem": "The team needs summer campaign delivery capacity.",
+    "why_now": "The summer campaign calendar has increased.",
+    "is_replacement": false
+  },
+  "success_outcomes": [
+    {
+      "outcome_id": "outcome_001",
+      "description": "Deliver approved weekly social content.",
+      "time_horizon": "First 30 days",
+      "measure": "At least three approved posts each week.",
+      "priority": "must_have",
+      "source_statement": "Deliver three approved posts each week."
+    }
+  ],
+  "responsibilities": [
+    {
+      "responsibility_id": "resp_001",
+      "description": "Draft and schedule social campaign content.",
+      "frequency": "Weekly",
+      "ownership_level": "Shared",
+      "priority": "must_have",
+      "source_statement": "Draft weekly campaign content with the team."
+    }
+  ],
+  "requirements": [
+    {
+      "requirement_id": "req_social",
+      "category": "domain",
+      "name": "Channel-aware social content",
+      "description": "Can adapt content choices to a named social channel.",
+      "priority": "must_have",
+      "proficiency": "working",
+      "learnability": "day_one",
+      "accepted_equivalents": [
+        "Academic, volunteer, club, or personal channel work"
+      ],
+      "business_rationale": "The intern contributes to active social campaigns from week one.",
+      "evidence_methods": [
+        "Screening response"
+      ],
+      "source_statement": "They must explain how they adapted content for a social channel.",
+      "requires_confirmation": false,
+      "approved_by_human": true
+    },
+    {
+      "requirement_id": "req_design",
+      "category": "technical",
+      "name": "Basic visual-content tooling",
+      "description": "Can make simple edits in a suitable visual content tool.",
+      "priority": "preferred",
+      "proficiency": "awareness",
+      "learnability": "within_30_days",
+      "accepted_equivalents": [
+        "Any comparable visual content tool"
+      ],
+      "business_rationale": "Simple edits can reduce hand-offs.",
+      "evidence_methods": [
+        "Portfolio example"
+      ],
+      "source_statement": "Basic visual editing would be useful but teachable.",
+      "requires_confirmation": false,
+      "approved_by_human": true
+    }
+  ],
+  "zuru_dna_behaviours": [
+    {
+      "value": "Collaboration",
+      "role_behaviour": "Shares draft work early and incorporates specific feedback.",
+      "scenario": "A campaign draft receives feedback.",
+      "evidence_method": "Behavioural screening response",
+      "source_statement": "They work openly with marketing and creative peers.",
+      "approved_by_human": true
+    }
+  ],
+  "constraints": {
+    "country": "New Zealand",
+    "location": "Auckland",
+    "work_arrangement": "On-site",
+    "work_rights": "Must hold valid New Zealand work rights.",
+    "weekly_hours": "40 hours"
+  },
+  "assessment_methods": [
+    "Structured screening questions"
+  ],
+  "decision_owner": "Talent Acquisition Partner",
+  "human_approved": true,
+  "approved_by": "Fixture Hiring Manager",
+  "approved_at": "2026-07-23T10:00:00Z",
+  "approved_sections": [
+    "business_purpose",
+    "outcomes",
+    "must_haves",
+    "behavioural_criteria",
+    "key_constraints"
+  ]
+}

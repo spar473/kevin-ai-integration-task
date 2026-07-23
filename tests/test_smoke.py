@@ -17,6 +17,7 @@ def test_core_modules_import() -> None:
         "src.llm_client",
         "src.workflow",
         "src.storage",
+        "src.generation",
     ):
         assert importlib.import_module(module_name)
 
@@ -31,4 +32,3 @@ def test_empty_role_starts_at_basic_info() -> None:
     state = WorkflowState(role_specification=RoleSpecification(role_id="role_001"))
 
     assert next_incomplete_stage(state) is WorkflowStage.BASIC_INFO
-

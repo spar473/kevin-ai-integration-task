@@ -293,7 +293,7 @@ class RoleQuality(DomainModel):
 class AuditMetadata(DomainModel):
     """Non-secret provenance metadata for an artefact."""
 
-    schema_version: str = "1.0"
+    schema_version: NonEmptyText = "1.0"
     created_at: datetime = Field(default_factory=lambda: datetime.now(UTC))
     updated_at: datetime = Field(default_factory=lambda: datetime.now(UTC))
     model: str | None = None
@@ -660,6 +660,186 @@ class DiscoveryTurnResult(DomainModel):
     contradictions: list[Contradiction] = Field(default_factory=list)
     next_question: ClarificationQuestion
     confidence: Confidence | None = None
+
+
+class JobDescriptionCriterion(DomainModel):
+    """One JD criterion tied to an approved role requirement."""
+
+    requirement_id: NonEmptyText
+    text: NonEmptyText
+
+
+class ZuruDnaSelection(DomainModel):
+    """A reference-grounded DNA value expressed as observable role behaviour."""
+
+    value: NonEmptyText
+    role_behaviour: NonEmptyText
+
+
+class JobDescription(DomainModel):
+    """Structured job description that remains editable section by section."""
+
+    title: NonEmptyText
+    location: NonEmptyText
+    purpose: NonEmptyText
+    business_impact: NonEmptyText
+    responsibilities: list[NonEmptyText] = Field(min_length=1)
+    outcomes: list[NonEmptyText] = Field(min_length=1)
+    must_have_criteria: list[JobDescriptionCriterion] = Field(min_length=1)
+    preferred_criteria: list[JobDescriptionCriterion]
+    zuru_dna_behaviours: list[ZuruDnaSelection] = Field(min_length=1)
+    logistics: list[NonEmptyText] = Field(min_length=1)
+    assessment_expectations: list[NonEmptyText] = Field(min_length=1)
+
+
+class RubricAnchor(DomainModel):
+    """Observable evidence associated with one score on the documented scale."""
+
+    score: Annotated[int, Field(ge=0, le=5)]
+    description: NonEmptyText
+
+    @field_validator("description")
+    @classmethod
+    def description_must_be_evidence_based(cls, value: str) -> str:
+        normalised = " ".join(value.casefold().split()).rstrip(".")
+        if normalised.removeprefix("an ").removeprefix("a ") in {
+            "bad answer",
+            "poor answer",
+            "weak answer",
+            "average answer",
+            "good answer",
+            "strong answer",
+            "excellent answer",
+        }:
+            raise ValueError(
+                "rubric descriptions must state observable evidence"
+            )
+        return value
+
+
+class ScreeningQuestion(DomainModel):
+    """A traceable screening question with evidence-based assessment guidance."""
+
+    question_id: NonEmptyText
+    question: NonEmptyText
+    requirement_ids: list[NonEmptyText] = Field(min_length=1)
+    purpose: NonEmptyText
+    expected_evidence: list[NonEmptyText] = Field(min_length=1)
+    rubric: list[RubricAnchor] = Field(min_length=6, max_length=6)
+    green_flags: list[NonEmptyText] = Field(min_length=1)
+    red_flags: list[NonEmptyText] = Field(min_length=1)
+    follow_up: NonEmptyText
+
+    @model_validator(mode="after")
+    def mappings_and_rubric_must_be_complete(self) -> ScreeningQuestion:
+        if len(self.requirement_ids) != len(set(self.requirement_ids)):
+            raise ValueError("requirement_ids must be unique within a question")
+        scores = [anchor.score for anchor in self.rubric]
+        if len(scores) != len(set(scores)):
+            raise ValueError("rubric scores must be unique")
+        if scores != list(range(6)):
+            raise ValueError("rubric anchors must be ordered scores 0 through 5")
+        return self
+
+
+def _question_ids_are_unique(questions: list[ScreeningQuestion]) -> bool:
+    identifiers = [question.question_id for question in questions]
+    return len(identifiers) == len(set(identifiers))
+
+
+class ProviderGenerationModel(BaseModel):
+    """Strict provider-facing base for hiring-pack structured output."""
+
+    model_config = ConfigDict(extra="forbid", strict=True)
+    inline_provider_schema: ClassVar[bool] = True
+
+
+class HiringPackDraft(ProviderGenerationModel):
+    """Provider output before application-owned provenance and validation."""
+
+    job_description: JobDescription
+    screening_questions: list[ScreeningQuestion] = Field(
+        min_length=5, max_length=7
+    )
+    human_review_guidance: list[NonEmptyText] = Field(min_length=1)
+
+    @model_validator(mode="after")
+    def question_ids_must_be_unique(self) -> HiringPackDraft:
+        if not _question_ids_are_unique(self.screening_questions):
+            raise ValueError("screening question IDs must be unique")
+        return self
+
+
+class ReferenceFileProvenance(DomainModel):
+    """Immutable identity and extraction details for one local reference file."""
+
+    filename: NonEmptyText
+    sha256: Annotated[str, Field(pattern="^[a-f0-9]{64}$")]
+    byte_size: Annotated[int, Field(gt=0)]
+    category: Annotated[str, Field(pattern="^(zuru_dna|example_jd)$")]
+    extraction_method: NonEmptyText
+
+
+class HiringPackProvenance(DomainModel):
+    """Generation metadata without retaining full prompts or artefacts."""
+
+    source_role_id: NonEmptyText
+    source_role_version: Annotated[int, Field(ge=1)]
+    generated_at: datetime
+    generated_by: NonEmptyText
+    model: str | None = None
+    provider: str | None = None
+    prompt_version: NonEmptyText
+    reference_files: list[ReferenceFileProvenance] = Field(min_length=2)
+    input_tokens: Annotated[int, Field(ge=0)] | None = None
+    output_tokens: Annotated[int, Field(ge=0)] | None = None
+    total_tokens: Annotated[int, Field(ge=0)] | None = None
+
+    @model_validator(mode="after")
+    def references_must_cover_dna_and_jd(self) -> HiringPackProvenance:
+        filenames = [item.filename for item in self.reference_files]
+        if len(filenames) != len(set(filenames)):
+            raise ValueError("reference filenames must be unique")
+        categories = {item.category for item in self.reference_files}
+        if categories != {"zuru_dna", "example_jd"}:
+            raise ValueError("reference files must include ZURU DNA and an example JD")
+        return self
+
+
+class HiringPack(DomainModel):
+    """Versioned hiring artefact generated from one approved role snapshot."""
+
+    schema_version: str = "1.0"
+    hiring_pack_id: NonEmptyText
+    version: Annotated[int, Field(ge=1)] = 1
+    parent_version: Annotated[int, Field(ge=1)] | None = None
+    source_session_id: NonEmptyText | None = None
+    provenance: HiringPackProvenance
+    job_description: JobDescription
+    screening_questions: list[ScreeningQuestion] = Field(
+        min_length=5, max_length=7
+    )
+    human_review_guidance: list[NonEmptyText] = Field(min_length=1)
+    human_edited: bool = False
+    last_edited_by: NonEmptyText | None = None
+    last_edited_at: datetime | None = None
+
+    @model_validator(mode="after")
+    def version_questions_and_edit_metadata_are_consistent(self) -> HiringPack:
+        if self.parent_version is not None and self.parent_version >= self.version:
+            raise ValueError("parent_version must be lower than version")
+        if not _question_ids_are_unique(self.screening_questions):
+            raise ValueError("screening question IDs must be unique")
+        has_edit_metadata = (
+            self.last_edited_by is not None or self.last_edited_at is not None
+        )
+        if self.human_edited and (
+            self.last_edited_by is None or self.last_edited_at is None
+        ):
+            raise ValueError("human-edited packs require editor and timestamp")
+        if not self.human_edited and has_edit_metadata:
+            raise ValueError("unedited packs cannot contain edit metadata")
+        return self
 
 
 class EvidenceItem(DomainModel):

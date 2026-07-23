@@ -20,16 +20,32 @@ from src.discovery import (
     edit_requirement,
     take_discovery_turn,
 )
+from src.generation import (
+    GenerationBlockedError,
+    HiringPackValidationError,
+    NoHiringPackChangesError,
+    ReferenceLoadError,
+    edit_and_persist_hiring_pack,
+    generate_and_persist_hiring_pack,
+    generation_blockers,
+    hiring_pack_is_stale,
+)
 from src.llm_client import LLMClientError, OpenRouterClient
 from src.models import (
     ApprovalSection,
     BasicRoleInfo,
     DiscoverySemanticValidationError,
     EmploymentType,
+    HiringPack,
+    JobDescription,
+    JobDescriptionCriterion,
     RequirementPriority,
     RoleFamily,
     RoleLevel,
     RoleSpecification,
+    RubricAnchor,
+    ScreeningQuestion,
+    ZuruDnaSelection,
 )
 from src.readiness import (
     REQUIRED_APPROVAL_SECTIONS,
@@ -89,6 +105,7 @@ def _human_label(value: str) -> str:
 SESSION_STORE = SessionStore(
     Path(__file__).resolve().parent / "data" / "sessions"
 )
+REFERENCE_DIRECTORY = Path(__file__).resolve().parent / "files"
 
 
 def _current_audit_log(role: RoleSpecification) -> AuditLog:
@@ -107,6 +124,28 @@ def _current_audit_log(role: RoleSpecification) -> AuditLog:
     return audit_log
 
 
+def _nonempty_lines(value: str) -> list[str]:
+    """Normalise a multi-line editor into deliberate non-empty list items."""
+    return [line.strip() for line in value.splitlines() if line.strip()]
+
+
+def _save_active_session(
+    *, hiring_pack: HiringPack, audit_log: AuditLog
+) -> None:
+    """Persist the full UI snapshot after a pack or audit file has been saved."""
+    state = st.session_state["workflow_state"]
+    session_id = st.session_state["session_id"]
+    if state is None or not session_id:
+        raise StorageError("The active session is unavailable.")
+    SESSION_STORE.save_session(
+        session_id=session_id,
+        workflow_state=state,
+        messages=st.session_state["discovery_messages"],
+        audit_log=audit_log,
+        hiring_pack=hiring_pack,
+    )
+
+
 with tabs[0]:
     st.subheader("Define Role")
 
@@ -123,6 +162,7 @@ with tabs[0]:
     st.session_state.setdefault("session_id", None)
     st.session_state.setdefault("discovery_messages", [])
     st.session_state.setdefault("audit_log", None)
+    st.session_state.setdefault("hiring_pack", None)
 
     with st.expander("Save or reload session"):
         current_state = st.session_state["workflow_state"]
@@ -149,6 +189,7 @@ with tabs[0]:
                             workflow_state=current_state,
                             messages=st.session_state["discovery_messages"],
                             audit_log=audit_log,
+                            hiring_pack=st.session_state["hiring_pack"],
                         )
                 except StorageError as exc:
                     st.error(f"Session could not be saved: {exc}")
@@ -184,6 +225,7 @@ with tabs[0]:
                     st.session_state["workflow_state"] = snapshot.workflow_state
                     st.session_state["discovery_messages"] = snapshot.messages
                     st.session_state["audit_log"] = snapshot.audit_log
+                    st.session_state["hiring_pack"] = snapshot.hiring_pack
                     st.session_state["discovery_error"] = None
                     st.rerun()
 
@@ -282,6 +324,7 @@ with tabs[0]:
                         st.session_state["workflow_state"] = state
                         st.session_state["discovery_messages"] = messages
                         st.session_state["audit_log"] = audit_log
+                        st.session_state["hiring_pack"] = None
                         st.session_state["discovery_error"] = None
                     st.rerun()
         else:
@@ -350,6 +393,7 @@ with tabs[0]:
                 st.session_state["session_id"] = None
                 st.session_state["discovery_messages"] = []
                 st.session_state["audit_log"] = None
+                st.session_state["hiring_pack"] = None
                 st.rerun()
 
         if st.session_state["discovery_error"]:
@@ -716,15 +760,527 @@ with tabs[1]:
                     use_container_width=True,
                 )
 
-notices = {
-    "Hiring Pack": "Job description and screening-pack generation are not implemented yet.",
-    "Candidate Evidence": "Candidate evidence evaluation is not implemented yet.",
-}
+with tabs[2]:
+    st.subheader("Hiring Pack")
+    state = st.session_state["workflow_state"]
+    if state is None:
+        st.info("Define and approve a role before generating a hiring pack.")
+    else:
+        role = state.role_specification
+        blockers = generation_blockers(role)
+        if blockers:
+            st.warning("Generation is unavailable until the approved-role contract is complete.")
+            for blocker in blockers:
+                st.write(f"- {blocker}")
+        else:
+            st.success(
+                f"Role version {role.version} is approved by "
+                f"{role.approved_by or 'the hiring manager'}."
+            )
 
-for tab, (name, notice) in zip(tabs[2:4], notices.items(), strict=True):
-    with tab:
-        st.subheader(name)
-        st.info(notice)
+        pack: HiringPack | None = st.session_state["hiring_pack"]
+        if pack is not None and hiring_pack_is_stale(pack, role):
+            st.warning(
+                "This hiring pack traces to an older role version. Re-approve the "
+                "current role, then regenerate before editing or using the pack."
+            )
+
+        generation_actor = st.text_input(
+            "Generation actor",
+            value=role.approved_by or "",
+            key=f"generation_actor_{role.role_id}_{role.version}",
+            help="Recorded in hiring-pack provenance and the append-only audit log.",
+        )
+        generation_disabled = bool(blockers) or not api_ready or not generation_actor.strip()
+        generation_label = "Regenerate hiring pack" if pack is not None else "Generate hiring pack"
+        if st.button(
+            generation_label,
+            disabled=generation_disabled,
+            type="primary",
+        ):
+            client = OpenRouterClient(settings)
+            session_id = st.session_state["session_id"] or uuid.uuid4().hex
+            st.session_state["session_id"] = session_id
+            try:
+                with st.spinner("Generating and validating the hiring pack..."):
+                    result = generate_and_persist_hiring_pack(
+                        role=role,
+                        llm_client=client,
+                        reference_directory=REFERENCE_DIRECTORY,
+                        actor=generation_actor,
+                        session_id=session_id,
+                        session_store=SESSION_STORE,
+                        audit_log=_current_audit_log(role),
+                        existing_pack=pack,
+                    )
+            except (
+                GenerationBlockedError,
+                HiringPackValidationError,
+                LLMClientError,
+                ReferenceLoadError,
+                StorageError,
+                ValueError,
+            ) as exc:
+                st.error(f"Hiring-pack generation could not be completed: {exc}")
+                st.caption("No unvalidated pack or generation audit event was accepted.")
+            else:
+                st.session_state["hiring_pack"] = result.hiring_pack
+                st.session_state["audit_log"] = result.audit_log
+                try:
+                    _save_active_session(
+                        hiring_pack=result.hiring_pack,
+                        audit_log=result.audit_log,
+                    )
+                except StorageError as exc:
+                    st.warning(
+                        "The pack and audit event were saved, but the full session "
+                        f"snapshot could not be refreshed: {exc}"
+                    )
+                st.rerun()
+
+        pack = st.session_state["hiring_pack"]
+        if pack is not None:
+            provenance = pack.provenance
+            metadata_columns = st.columns(3)
+            metadata_columns[0].metric("Pack version", pack.version)
+            metadata_columns[1].metric(
+                "Source role version", provenance.source_role_version
+            )
+            metadata_columns[2].metric(
+                "Human edited", "Yes" if pack.human_edited else "No"
+            )
+            st.caption(
+                f"Generated {provenance.generated_at.isoformat()} by "
+                f"{provenance.generated_by}; model "
+                f"{provenance.model or 'not reported'}; prompt "
+                f"{provenance.prompt_version}."
+            )
+            st.caption(
+                "Local references: "
+                + ", ".join(
+                    reference.filename for reference in provenance.reference_files
+                )
+            )
+            if pack.last_edited_by and pack.last_edited_at:
+                st.caption(
+                    f"Last edited {pack.last_edited_at.isoformat()} by "
+                    f"{pack.last_edited_by}."
+                )
+
+            jd = pack.job_description
+            st.markdown("---")
+            st.markdown(f"## {jd.title}")
+            st.caption(jd.location)
+            st.markdown("**Role purpose**")
+            st.write(jd.purpose)
+            st.markdown("**Business impact**")
+            st.write(jd.business_impact)
+            for label, values in (
+                ("Responsibilities", jd.responsibilities),
+                ("Measurable outcomes", jd.outcomes),
+            ):
+                st.markdown(f"**{label}**")
+                for value in values:
+                    st.write(f"- {value}")
+
+            requirement_by_id = {
+                item.requirement_id: item for item in role.requirements
+            }
+            st.markdown("**Must-have criteria**")
+            for criterion in jd.must_have_criteria:
+                st.write(f"- {criterion.text}")
+                st.caption(
+                    f"{criterion.requirement_id} — "
+                    f"{requirement_by_id[criterion.requirement_id].name}"
+                )
+            st.markdown("**Preferred criteria**")
+            if jd.preferred_criteria:
+                for criterion in jd.preferred_criteria:
+                    st.write(f"- {criterion.text}")
+                    st.caption(
+                        f"{criterion.requirement_id} — "
+                        f"{requirement_by_id[criterion.requirement_id].name}"
+                    )
+            else:
+                st.caption("No approved preferred criteria.")
+
+            st.markdown("**Relevant ZURU DNA behaviours**")
+            for behaviour in jd.zuru_dna_behaviours:
+                st.write(f"- **{behaviour.value}:** {behaviour.role_behaviour}")
+            st.markdown("**Logistics and eligibility**")
+            for value in jd.logistics:
+                st.write(f"- {value}")
+            st.markdown("**Assessment expectations**")
+            for value in jd.assessment_expectations:
+                st.write(f"- {value}")
+
+            if not hiring_pack_is_stale(pack, role):
+                with st.expander("Edit job description"):
+                    with st.form(f"edit_jd_{pack.hiring_pack_id}_{pack.version}"):
+                        jd_editor = st.text_input("Editor name")
+                        edited_title = st.text_input("Title", value=jd.title)
+                        edited_location = st.text_input("Location", value=jd.location)
+                        edited_purpose = st.text_area("Role purpose", value=jd.purpose)
+                        edited_impact = st.text_area(
+                            "Business impact", value=jd.business_impact
+                        )
+                        edited_responsibilities = st.text_area(
+                            "Responsibilities — one per line",
+                            value="\n".join(jd.responsibilities),
+                        )
+                        edited_outcomes = st.text_area(
+                            "Measurable outcomes — one per line",
+                            value="\n".join(jd.outcomes),
+                        )
+                        edited_must_text: list[str] = []
+                        for criterion in jd.must_have_criteria:
+                            edited_must_text.append(
+                                st.text_area(
+                                    f"Must-have {criterion.requirement_id}",
+                                    value=criterion.text,
+                                )
+                            )
+                        edited_preferred_text: list[str] = []
+                        for criterion in jd.preferred_criteria:
+                            edited_preferred_text.append(
+                                st.text_area(
+                                    f"Preferred {criterion.requirement_id}",
+                                    value=criterion.text,
+                                )
+                            )
+                        edited_dna_values: list[str] = []
+                        edited_dna_behaviours: list[str] = []
+                        for index, behaviour in enumerate(jd.zuru_dna_behaviours):
+                            edited_dna_values.append(
+                                st.text_input(
+                                    f"DNA value {index + 1}",
+                                    value=behaviour.value,
+                                )
+                            )
+                            edited_dna_behaviours.append(
+                                st.text_area(
+                                    f"Observable DNA behaviour {index + 1}",
+                                    value=behaviour.role_behaviour,
+                                )
+                            )
+                        edited_logistics = st.text_area(
+                            "Logistics — one per line",
+                            value="\n".join(jd.logistics),
+                        )
+                        edited_assessment = st.text_area(
+                            "Assessment expectations — one per line",
+                            value="\n".join(jd.assessment_expectations),
+                        )
+                        save_jd = st.form_submit_button(
+                            "Save JD changes",
+                            disabled=not jd_editor.strip(),
+                        )
+
+                    if save_jd:
+                        try:
+                            updated_jd = JobDescription(
+                                title=edited_title,
+                                location=edited_location,
+                                purpose=edited_purpose,
+                                business_impact=edited_impact,
+                                responsibilities=_nonempty_lines(
+                                    edited_responsibilities
+                                ),
+                                outcomes=_nonempty_lines(edited_outcomes),
+                                must_have_criteria=[
+                                    JobDescriptionCriterion(
+                                        requirement_id=criterion.requirement_id,
+                                        text=text,
+                                    )
+                                    for criterion, text in zip(
+                                        jd.must_have_criteria,
+                                        edited_must_text,
+                                        strict=True,
+                                    )
+                                ],
+                                preferred_criteria=[
+                                    JobDescriptionCriterion(
+                                        requirement_id=criterion.requirement_id,
+                                        text=text,
+                                    )
+                                    for criterion, text in zip(
+                                        jd.preferred_criteria,
+                                        edited_preferred_text,
+                                        strict=True,
+                                    )
+                                ],
+                                zuru_dna_behaviours=[
+                                    ZuruDnaSelection(
+                                        value=value,
+                                        role_behaviour=behaviour,
+                                    )
+                                    for value, behaviour in zip(
+                                        edited_dna_values,
+                                        edited_dna_behaviours,
+                                        strict=True,
+                                    )
+                                ],
+                                logistics=_nonempty_lines(edited_logistics),
+                                assessment_expectations=_nonempty_lines(
+                                    edited_assessment
+                                ),
+                            )
+                            result = edit_and_persist_hiring_pack(
+                                hiring_pack=pack,
+                                role=role,
+                                editor=jd_editor,
+                                session_id=st.session_state["session_id"],
+                                session_store=SESSION_STORE,
+                                audit_log=_current_audit_log(role),
+                                job_description=updated_jd,
+                            )
+                        except NoHiringPackChangesError:
+                            st.info("No JD content changed, so no edit event was recorded.")
+                        except ValidationError:
+                            st.error(
+                                "JD changes were not saved. Complete every required "
+                                "section and keep it aligned to the approved role."
+                            )
+                        except (
+                            GenerationBlockedError,
+                            HiringPackValidationError,
+                            StorageError,
+                            ValueError,
+                        ) as exc:
+                            st.error(f"JD changes were not saved: {exc}")
+                        else:
+                            st.session_state["hiring_pack"] = result.hiring_pack
+                            st.session_state["audit_log"] = result.audit_log
+                            try:
+                                _save_active_session(
+                                    hiring_pack=result.hiring_pack,
+                                    audit_log=result.audit_log,
+                                )
+                            except StorageError as exc:
+                                st.warning(
+                                    "The edit and audit event were saved, but the "
+                                    f"full session snapshot was not refreshed: {exc}"
+                                )
+                            st.rerun()
+
+            st.markdown("---")
+            st.markdown(f"## Screening questions ({len(pack.screening_questions)})")
+            for question_index, item in enumerate(pack.screening_questions):
+                mapped_labels = [
+                    f"{requirement_id} — {requirement_by_id[requirement_id].name}"
+                    for requirement_id in item.requirement_ids
+                ]
+                with st.expander(
+                    f"{item.question_id}: {item.question}",
+                    expanded=question_index == 0,
+                ):
+                    st.markdown("**Mapped requirements**")
+                    for label in mapped_labels:
+                        st.write(f"- {label}")
+                    st.markdown("**Purpose**")
+                    st.write(item.purpose)
+                    st.markdown("**Expected evidence**")
+                    for value in item.expected_evidence:
+                        st.write(f"- {value}")
+                    st.markdown("**Anchored rubric**")
+                    st.dataframe(
+                        [
+                            {
+                                "Score": anchor.score,
+                                "Observable evidence": anchor.description,
+                            }
+                            for anchor in item.rubric
+                        ],
+                        hide_index=True,
+                        width="stretch",
+                    )
+                    flag_columns = st.columns(2)
+                    with flag_columns[0]:
+                        st.markdown("**Green flags**")
+                        for value in item.green_flags:
+                            st.write(f"- {value}")
+                    with flag_columns[1]:
+                        st.markdown("**Red flags**")
+                        for value in item.red_flags:
+                            st.write(f"- {value}")
+                    st.markdown("**Human follow-up**")
+                    st.write(item.follow_up)
+
+                    if not hiring_pack_is_stale(pack, role):
+                        with st.form(
+                            f"edit_question_{pack.hiring_pack_id}_"
+                            f"{pack.version}_{item.question_id}"
+                        ):
+                            question_editor = st.text_input("Editor name")
+                            edited_question = st.text_area(
+                                "Question", value=item.question
+                            )
+                            edited_mappings = st.multiselect(
+                                "Mapped requirement IDs",
+                                options=list(requirement_by_id),
+                                default=item.requirement_ids,
+                                format_func=lambda requirement_id: (
+                                    f"{requirement_id} — "
+                                    f"{requirement_by_id[requirement_id].name}"
+                                ),
+                            )
+                            edited_purpose = st.text_area(
+                                "Purpose", value=item.purpose
+                            )
+                            edited_evidence = st.text_area(
+                                "Expected evidence — one per line",
+                                value="\n".join(item.expected_evidence),
+                            )
+                            edited_anchor_text: list[str] = []
+                            for anchor in item.rubric:
+                                edited_anchor_text.append(
+                                    st.text_area(
+                                        f"Score {anchor.score} anchor",
+                                        value=anchor.description,
+                                    )
+                                )
+                            edited_green = st.text_area(
+                                "Green flags — one per line",
+                                value="\n".join(item.green_flags),
+                            )
+                            edited_red = st.text_area(
+                                "Red flags — one per line",
+                                value="\n".join(item.red_flags),
+                            )
+                            edited_follow_up = st.text_area(
+                                "Follow-up", value=item.follow_up
+                            )
+                            save_question = st.form_submit_button(
+                                "Save question changes",
+                                disabled=not question_editor.strip(),
+                            )
+
+                        if save_question:
+                            try:
+                                updated_question = ScreeningQuestion(
+                                    question_id=item.question_id,
+                                    question=edited_question,
+                                    requirement_ids=edited_mappings,
+                                    purpose=edited_purpose,
+                                    expected_evidence=_nonempty_lines(
+                                        edited_evidence
+                                    ),
+                                    rubric=[
+                                        RubricAnchor(
+                                            score=score,
+                                            description=description,
+                                        )
+                                        for score, description in enumerate(
+                                            edited_anchor_text
+                                        )
+                                    ],
+                                    green_flags=_nonempty_lines(edited_green),
+                                    red_flags=_nonempty_lines(edited_red),
+                                    follow_up=edited_follow_up,
+                                )
+                                updated_questions = list(pack.screening_questions)
+                                updated_questions[question_index] = updated_question
+                                result = edit_and_persist_hiring_pack(
+                                    hiring_pack=pack,
+                                    role=role,
+                                    editor=question_editor,
+                                    session_id=st.session_state["session_id"],
+                                    session_store=SESSION_STORE,
+                                    audit_log=_current_audit_log(role),
+                                    screening_questions=updated_questions,
+                                )
+                            except NoHiringPackChangesError:
+                                st.info(
+                                    "No question content changed, so no edit event "
+                                    "was recorded."
+                                )
+                            except ValidationError:
+                                st.error(
+                                    "Question changes were not saved. Keep at least "
+                                    "one valid mapping, all six anchors, and non-empty "
+                                    "red and green flags."
+                                )
+                            except (
+                                GenerationBlockedError,
+                                HiringPackValidationError,
+                                StorageError,
+                                ValueError,
+                            ) as exc:
+                                st.error(f"Question changes were not saved: {exc}")
+                            else:
+                                st.session_state["hiring_pack"] = result.hiring_pack
+                                st.session_state["audit_log"] = result.audit_log
+                                try:
+                                    _save_active_session(
+                                        hiring_pack=result.hiring_pack,
+                                        audit_log=result.audit_log,
+                                    )
+                                except StorageError as exc:
+                                    st.warning(
+                                        "The edit and audit event were saved, but "
+                                        "the full session snapshot was not refreshed: "
+                                        f"{exc}"
+                                    )
+                                st.rerun()
+
+            st.markdown("**Human-review guidance**")
+            for value in pack.human_review_guidance:
+                st.write(f"- {value}")
+            if not hiring_pack_is_stale(pack, role):
+                with st.form(
+                    f"edit_guidance_{pack.hiring_pack_id}_{pack.version}"
+                ):
+                    guidance_editor = st.text_input("Guidance editor")
+                    edited_guidance = st.text_area(
+                        "Guidance — one item per line",
+                        value="\n".join(pack.human_review_guidance),
+                    )
+                    save_guidance = st.form_submit_button(
+                        "Save guidance changes",
+                        disabled=not guidance_editor.strip(),
+                    )
+                if save_guidance:
+                    try:
+                        result = edit_and_persist_hiring_pack(
+                            hiring_pack=pack,
+                            role=role,
+                            editor=guidance_editor,
+                            session_id=st.session_state["session_id"],
+                            session_store=SESSION_STORE,
+                            audit_log=_current_audit_log(role),
+                            human_review_guidance=_nonempty_lines(edited_guidance),
+                        )
+                    except NoHiringPackChangesError:
+                        st.info(
+                            "No guidance changed, so no edit event was recorded."
+                        )
+                    except ValidationError:
+                        st.error("At least one human-review guidance item is required.")
+                    except (
+                        GenerationBlockedError,
+                        HiringPackValidationError,
+                        StorageError,
+                        ValueError,
+                    ) as exc:
+                        st.error(f"Guidance changes were not saved: {exc}")
+                    else:
+                        st.session_state["hiring_pack"] = result.hiring_pack
+                        st.session_state["audit_log"] = result.audit_log
+                        try:
+                            _save_active_session(
+                                hiring_pack=result.hiring_pack,
+                                audit_log=result.audit_log,
+                            )
+                        except StorageError as exc:
+                            st.warning(
+                                "The edit and audit event were saved, but the "
+                                f"full session snapshot was not refreshed: {exc}"
+                            )
+                        st.rerun()
+
+with tabs[3]:
+    st.subheader("Candidate Evidence")
+    st.info("Candidate evidence evaluation is reserved for Phase 7 and is not implemented.")
 
 with tabs[4]:
     st.subheader("System Status")

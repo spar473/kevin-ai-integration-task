@@ -1,0 +1,22 @@
+{
+  "role_id": "role_fixture_culture_heavy",
+  "basic_info": {
+    "title": "Brand Team Member",
+    "role_family": "marketing",
+    "role_level": "entry",
+    "employment_type": "permanent",
+    "initial_manager_statement": "Skills can be taught, I need someone who gets our vibe."
+  },
+  "business_need": {
+    "problem": "Add another person to the brand team."
+  },
+  "zuru_dna_behaviours": [
+    {
+      "value": "Good Humans Only",
+      "role_behaviour": "Gets our vibe.",
+      "source_statement": "I need someone who gets our vibe.",
+      "approved_by_human": false
+    }
+  ],
+  "human_approved": false
+}

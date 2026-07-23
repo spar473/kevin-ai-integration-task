@@ -7,6 +7,7 @@ import os
 import tempfile
 from datetime import UTC, datetime
 from enum import Enum
+from hashlib import sha256
 from pathlib import Path
 import re
 from typing import Literal, TypeVar
@@ -15,6 +16,7 @@ from pydantic import BaseModel, ConfigDict, Field, ValidationError
 
 from src.models import (
     ClarificationQuestion,
+    HiringPack,
     RoleSpecification,
     WorkflowStage,
 )
@@ -127,6 +129,7 @@ class SessionSnapshot(StorageModel):
     workflow_state: WorkflowState
     messages: list[DiscoveryMessage]
     audit_log: AuditLog
+    hiring_pack: HiringPack | None = None
 
 
 def append_audit_event(
@@ -137,6 +140,9 @@ def append_audit_event(
     actor: str,
     metadata: dict[str, object] | None = None,
     occurred_at: datetime | None = None,
+    artifact_model: str | None = None,
+    artifact_prompt_version: str | None = None,
+    inherit_role_audit: bool = True,
 ) -> AuditLog:
     """Return a copied log with one chronological, version-aware event."""
     timestamp = occurred_at or datetime.now(UTC)
@@ -151,8 +157,12 @@ def append_audit_event(
         role_version=role.version,
         parent_version=role.parent_version,
         approval=role.human_approved,
-        model=role.audit.model,
-        prompt_version=role.audit.prompt_version,
+        model=role.audit.model if inherit_role_audit else artifact_model,
+        prompt_version=(
+            role.audit.prompt_version
+            if inherit_role_audit
+            else artifact_prompt_version
+        ),
         metadata=metadata or {},
     )
     return audit_log.model_copy(update={"events": [*audit_log.events, event]})
@@ -332,6 +342,111 @@ def record_human_review(
     )
 
 
+def _hiring_pack_content_hash(pack: HiringPack) -> str:
+    content = {
+        "job_description": pack.job_description.model_dump(mode="json"),
+        "screening_questions": [
+            item.model_dump(mode="json") for item in pack.screening_questions
+        ],
+        "human_review_guidance": pack.human_review_guidance,
+    }
+    canonical = json.dumps(
+        content,
+        ensure_ascii=False,
+        sort_keys=True,
+        separators=(",", ":"),
+    ).encode("utf-8")
+    return sha256(canonical).hexdigest()
+
+
+def record_hiring_pack_generated(
+    audit_log: AuditLog,
+    *,
+    role: RoleSpecification,
+    hiring_pack: HiringPack,
+) -> AuditLog:
+    """Record one validated, already-persisted hiring-pack generation."""
+    provenance = hiring_pack.provenance
+    if (
+        provenance.source_role_id != role.role_id
+        or provenance.source_role_version != role.version
+    ):
+        raise AuditIntegrityError(
+            "Hiring-pack generation does not trace to the supplied role version."
+        )
+    return append_audit_event(
+        audit_log,
+        AuditEventType.HIRING_PACK_GENERATED,
+        role=role,
+        actor=provenance.generated_by,
+        occurred_at=provenance.generated_at,
+        inherit_role_audit=False,
+        artifact_model=provenance.model,
+        artifact_prompt_version=provenance.prompt_version,
+        metadata={
+            "hiring_pack_id": hiring_pack.hiring_pack_id,
+            "hiring_pack_version": hiring_pack.version,
+            "source_role_version": provenance.source_role_version,
+            "provider": provenance.provider,
+            "reference_files": [
+                item.filename for item in provenance.reference_files
+            ],
+            "question_count": len(hiring_pack.screening_questions),
+        },
+    )
+
+
+def record_hiring_pack_edited(
+    audit_log: AuditLog,
+    *,
+    role: RoleSpecification,
+    previous_pack: HiringPack,
+    updated_pack: HiringPack,
+    changed_fields: list[str],
+) -> AuditLog:
+    """Record one meaningful, validated human edit using content hashes."""
+    if not changed_fields:
+        raise AuditIntegrityError("A no-op hiring-pack edit cannot be audited.")
+    if (
+        previous_pack.hiring_pack_id != updated_pack.hiring_pack_id
+        or updated_pack.parent_version != previous_pack.version
+        or updated_pack.version != previous_pack.version + 1
+        or not updated_pack.human_edited
+        or updated_pack.last_edited_by is None
+        or updated_pack.last_edited_at is None
+    ):
+        raise AuditIntegrityError("Hiring-pack edit version metadata is invalid.")
+    if (
+        updated_pack.provenance.source_role_id != role.role_id
+        or updated_pack.provenance.source_role_version != role.version
+    ):
+        raise AuditIntegrityError(
+            "Hiring-pack edit does not trace to the supplied role version."
+        )
+    before_hash = _hiring_pack_content_hash(previous_pack)
+    after_hash = _hiring_pack_content_hash(updated_pack)
+    if before_hash == after_hash:
+        raise AuditIntegrityError("A no-op hiring-pack edit cannot be audited.")
+    return append_audit_event(
+        audit_log,
+        AuditEventType.HIRING_PACK_EDITED,
+        role=role,
+        actor=updated_pack.last_edited_by,
+        occurred_at=updated_pack.last_edited_at,
+        inherit_role_audit=False,
+        artifact_model=updated_pack.provenance.model,
+        artifact_prompt_version=updated_pack.provenance.prompt_version,
+        metadata={
+            "hiring_pack_id": updated_pack.hiring_pack_id,
+            "hiring_pack_version": updated_pack.version,
+            "previous_hiring_pack_version": previous_pack.version,
+            "edited_fields": changed_fields,
+            "before_sha256": before_hash,
+            "after_sha256": after_hash,
+        },
+    )
+
+
 class JsonStorage:
     """Persist Pydantic models beneath one configured directory."""
 
@@ -420,7 +535,9 @@ class SessionStore:
     _ROLE_FILE = "role_specification.json"
     _HISTORY_FILE = "discovery_history.json"
     _AUDIT_FILE = "audit_log.json"
+    _HIRING_PACK_FILE = "hiring_pack.json"
     _VERSIONS_FOLDER = "role_versions"
+    _HIRING_PACK_VERSIONS_FOLDER = "hiring_pack_versions"
 
     def __init__(self, root: Path) -> None:
         self.storage = JsonStorage(root)
@@ -462,6 +579,7 @@ class SessionStore:
         workflow_state: WorkflowState,
         messages: list[DiscoveryMessage],
         audit_log: AuditLog,
+        hiring_pack: HiringPack | None = None,
     ) -> Path:
         """Atomically save each validated session file and preserve audit prefix."""
         folder = self._folder_name(session_id)
@@ -521,8 +639,88 @@ class SessionStore:
             role,
         )
         self.storage.save(f"{folder}/{self._HISTORY_FILE}", history)
+        if hiring_pack is not None:
+            if (
+                hiring_pack.provenance.source_role_id != role.role_id
+                or hiring_pack.provenance.source_role_version > role.version
+            ):
+                raise StorageValidationError(
+                    "Hiring pack does not trace to this session's role history."
+                )
+            self.save_hiring_pack(session_id, hiring_pack)
         self.storage.save(audit_path, audit_log)
         return self.root / folder
+
+    def save_hiring_pack(
+        self, session_id: str, hiring_pack: HiringPack
+    ) -> Path:
+        """Persist the current pack and retain every prior pack version."""
+        folder = self._folder_name(session_id)
+        if (
+            hiring_pack.source_session_id is not None
+            and hiring_pack.source_session_id != session_id
+        ):
+            raise StorageValidationError(
+                "Hiring pack belongs to a different session."
+            )
+        pack_path = f"{folder}/{self._HIRING_PACK_FILE}"
+        try:
+            existing_pack = self.storage.load(pack_path, HiringPack)
+        except MissingStorageFile:
+            existing_pack = None
+        if existing_pack is not None:
+            if existing_pack.hiring_pack_id != hiring_pack.hiring_pack_id:
+                raise AuditIntegrityError(
+                    "A persisted hiring pack cannot be replaced with a new ID."
+                )
+            if existing_pack.version == hiring_pack.version:
+                if existing_pack != hiring_pack:
+                    raise AuditIntegrityError(
+                        "A hiring-pack version cannot be rewritten."
+                    )
+                return self.storage._safe_path(pack_path)
+            if (
+                hiring_pack.version != existing_pack.version + 1
+                or hiring_pack.parent_version != existing_pack.version
+            ):
+                raise AuditIntegrityError(
+                    "Hiring-pack versions must be appended sequentially."
+                )
+            self.storage.save(
+                (
+                    f"{folder}/{self._HIRING_PACK_VERSIONS_FOLDER}/"
+                    f"hiring_pack_v{existing_pack.version}.json"
+                ),
+                existing_pack,
+            )
+        self.storage.save(pack_path, hiring_pack)
+        self.storage.save(
+            (
+                f"{folder}/{self._HIRING_PACK_VERSIONS_FOLDER}/"
+                f"hiring_pack_v{hiring_pack.version}.json"
+            ),
+            hiring_pack,
+        )
+        return self.storage._safe_path(pack_path)
+
+    def save_audit_log(self, session_id: str, audit_log: AuditLog) -> Path:
+        """Persist only an append-only audit continuation for a session."""
+        folder = self._folder_name(session_id)
+        if audit_log.session_id != session_id:
+            raise AuditIntegrityError("Audit log belongs to a different session.")
+        audit_path = f"{folder}/{self._AUDIT_FILE}"
+        try:
+            existing_log = self.storage.load(audit_path, AuditLog)
+        except MissingStorageFile:
+            existing_log = None
+        if existing_log is not None:
+            prefix = audit_log.events[: len(existing_log.events)]
+            if (
+                len(audit_log.events) < len(existing_log.events)
+                or prefix != existing_log.events
+            ):
+                raise AuditIntegrityError("Audit log must remain append-only.")
+        return self.storage.save(audit_path, audit_log)
 
     def load_session(self, session_id: str) -> SessionSnapshot:
         """Load all required files and reject cross-version inconsistencies."""
@@ -534,6 +732,12 @@ class SessionStore:
             f"{folder}/{self._HISTORY_FILE}", DiscoveryHistory
         )
         audit_log = self.storage.load(f"{folder}/{self._AUDIT_FILE}", AuditLog)
+        try:
+            hiring_pack = self.storage.load(
+                f"{folder}/{self._HIRING_PACK_FILE}", HiringPack
+            )
+        except MissingStorageFile:
+            hiring_pack = None
         if (
             history.session_id != session_id
             or audit_log.session_id != session_id
@@ -542,6 +746,17 @@ class SessionStore:
         ):
             raise StorageValidationError(
                 "Stored session files do not reference the same role version."
+            )
+        if hiring_pack is not None and (
+            hiring_pack.provenance.source_role_id != role.role_id
+            or hiring_pack.provenance.source_role_version > role.version
+            or (
+                hiring_pack.source_session_id is not None
+                and hiring_pack.source_session_id != session_id
+            )
+        ):
+            raise StorageValidationError(
+                "Stored hiring pack does not trace to the session role history."
             )
         state = WorkflowState(
             role_specification=role,
@@ -554,4 +769,5 @@ class SessionStore:
             workflow_state=state,
             messages=history.messages,
             audit_log=audit_log,
+            hiring_pack=hiring_pack,
         )
