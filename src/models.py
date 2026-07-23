@@ -276,28 +276,6 @@ class AuditMetadata(DomainModel):
     source_ids: list[str] = Field(default_factory=list)
 
 
-class RoleSpecification(DomainModel):
-    """Shared source of truth for role discovery and later artefacts."""
-
-    role_id: NonEmptyText
-    version: Annotated[int, Field(ge=1)] = 1
-    review_status: ReviewStatus = ReviewStatus.DRAFT
-    basic_info: BasicRoleInfo = Field(default_factory=BasicRoleInfo)
-    business_need: BusinessNeed = Field(default_factory=BusinessNeed)
-    success_outcomes: list[SuccessOutcome] = Field(default_factory=list)
-    responsibilities: list[Responsibility] = Field(default_factory=list)
-    requirements: list[Requirement] = Field(default_factory=list)
-    zuru_dna_behaviours: list[ZuruDnaBehaviour] = Field(default_factory=list)
-    constraints: RoleConstraints = Field(default_factory=RoleConstraints)
-    assessment_methods: list[str] = Field(default_factory=list)
-    decision_owner: str | None = None
-    quality: RoleQuality = Field(default_factory=RoleQuality)
-    audit: AuditMetadata = Field(default_factory=AuditMetadata)
-    human_approved: bool = False
-    approved_by: str | None = None
-    approved_at: datetime | None = None
-
-
 class ClarificationQuestion(DomainModel):
     """A single high-value question proposed for the manager."""
 
@@ -323,6 +301,69 @@ class UnresolvedAmbiguity(DomainModel):
     description: NonEmptyText
     source_statement: NonEmptyText
     why_confirmation_is_needed: NonEmptyText
+
+
+class RoleSpecification(DomainModel):
+    """Shared source of truth for role discovery and later artefacts."""
+
+    role_id: NonEmptyText
+    version: Annotated[int, Field(ge=1)] = 1
+    review_status: ReviewStatus = ReviewStatus.DRAFT
+    basic_info: BasicRoleInfo = Field(default_factory=BasicRoleInfo)
+    business_need: BusinessNeed = Field(default_factory=BusinessNeed)
+    success_outcomes: list[SuccessOutcome] = Field(default_factory=list)
+    responsibilities: list[Responsibility] = Field(default_factory=list)
+    requirements: list[Requirement] = Field(default_factory=list)
+    open_assumptions: list[DiscoveryAssumption] = Field(default_factory=list)
+    open_ambiguities: list[UnresolvedAmbiguity] = Field(default_factory=list)
+    zuru_dna_behaviours: list[ZuruDnaBehaviour] = Field(default_factory=list)
+    constraints: RoleConstraints = Field(default_factory=RoleConstraints)
+    assessment_methods: list[str] = Field(default_factory=list)
+    decision_owner: str | None = None
+    quality: RoleQuality = Field(default_factory=RoleQuality)
+    audit: AuditMetadata = Field(default_factory=AuditMetadata)
+    human_approved: bool = False
+    approved_by: str | None = None
+    approved_at: datetime | None = None
+
+
+def _source_statements_overlap(first: str, second: str) -> bool:
+    """Return whether two source statements refer to the same unresolved wording."""
+    left = first.strip().lower()
+    right = second.strip().lower()
+    if not left or not right:
+        return False
+    return left == right or left in right or right in left
+
+
+_HEDGE_PHRASES: tuple[str, ...] = (
+    "unspecified",
+    "not specified",
+    "not yet specified",
+    "unresolved",
+    "unclear",
+    "undefined",
+    "not defined",
+    "not yet defined",
+    "unknown",
+    "not yet known",
+    "tbd",
+    "to be determined",
+    "not confirmed",
+    "unconfirmed",
+)
+
+
+def _admits_unresolved_scope(*texts: str) -> bool:
+    """Return whether any text admits, in its own words, that scope is still open.
+
+    This is a self-contained backstop: it does not depend on a matching
+    ``ambiguities`` entry existing at all, only on the requirement's own
+    wording. A requirement whose own description hedges this way cannot
+    honestly be ``must_have`` yet, regardless of what else the turn extracted.
+    """
+    combined = " ".join(text.lower() for text in texts if text)
+    return any(phrase in combined for phrase in _HEDGE_PHRASES)
 
 
 class DiscoverySemanticValidationError(ValueError):
@@ -405,6 +446,7 @@ class DiscoveryExtractionResponse(ProviderDiscoveryModel):
         categories = {item.value for item in RequirementCategory}
         priorities = {item.value for item in RequirementPriority}
         recommendations = {item.value for item in DiscoveryProgressRecommendation}
+        ambiguity_sources = [item.source_statement for item in self.ambiguities]
         for index, requirement in enumerate(self.incremental_requirements):
             prefix = f"incremental_requirements.{index}"
             for field_name in (
@@ -418,6 +460,26 @@ class DiscoveryExtractionResponse(ProviderDiscoveryModel):
                 issues.append((f"{prefix}.category", "unsupported_category"))
             if requirement.priority not in priorities:
                 issues.append((f"{prefix}.priority", "unsupported_priority"))
+            if requirement.priority == RequirementPriority.MUST_HAVE.value:
+                if any(
+                    _source_statements_overlap(
+                        requirement.source_statement, ambiguity_source
+                    )
+                    for ambiguity_source in ambiguity_sources
+                ):
+                    issues.append(
+                        (
+                            f"{prefix}.priority",
+                            "must_have_conflicts_with_unresolved_ambiguity",
+                        )
+                    )
+                if _admits_unresolved_scope(requirement.name, requirement.description):
+                    issues.append(
+                        (
+                            f"{prefix}.priority",
+                            "must_have_admits_unresolved_scope",
+                        )
+                    )
         for index, assumption in enumerate(self.assumptions):
             prefix = f"assumptions.{index}"
             require_text(f"{prefix}.statement", assumption.statement)

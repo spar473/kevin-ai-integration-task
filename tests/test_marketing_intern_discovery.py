@@ -10,6 +10,7 @@ from pydantic import ValidationError
 
 from src.models import (
     DiscoveryExtractionResponse,
+    DiscoverySemanticValidationError,
     DiscoveryTurnResult,
     WorkflowStage,
 )
@@ -194,6 +195,182 @@ def test_discovery_result_rejects_more_than_one_question_field() -> None:
         DiscoveryTurnResult.model_validate(payload)
 
 
+def test_must_have_requirement_sharing_ambiguity_source_is_rejected() -> None:
+    payload = marketing_intern_compact_payload()
+    payload["incremental_requirements"][0]["priority"] = "must_have"
+    payload["ambiguities"] = [
+        {
+            "description": '"Good with social media" does not specify platforms or level.',
+            "source_statement": payload["incremental_requirements"][0][
+                "source_statement"
+            ],
+            "why_confirmation_is_needed": "Platform and level are unknown.",
+        }
+    ]
+
+    compact = DiscoveryExtractionResponse.model_validate(payload)
+
+    with pytest.raises(DiscoverySemanticValidationError) as excinfo:
+        compact.validate_semantics()
+    assert (
+        "incremental_requirements.0.priority",
+        "must_have_conflicts_with_unresolved_ambiguity",
+    ) in excinfo.value.issues
+
+
+def test_preferred_requirement_sharing_ambiguity_source_is_allowed() -> None:
+    payload = marketing_intern_compact_payload()
+    payload["incremental_requirements"][0]["priority"] = "preferred"
+    payload["ambiguities"] = [
+        {
+            "description": '"Good with social media" does not specify platforms or level.',
+            "source_statement": payload["incremental_requirements"][0][
+                "source_statement"
+            ],
+            "why_confirmation_is_needed": "Platform and level are unknown.",
+        }
+    ]
+
+    compact = DiscoveryExtractionResponse.model_validate(payload)
+
+    compact.validate_semantics()
+
+
+def test_must_have_requirement_admitting_unresolved_scope_is_rejected() -> None:
+    """A must_have requirement is rejected on its own wording alone, even with
+    no ambiguities list at all to cross-reference against."""
+    payload = marketing_intern_compact_payload()
+    payload["incremental_requirements"][0]["priority"] = "must_have"
+    payload["incremental_requirements"][0]["description"] = (
+        "Social media capability is expected, but the platforms and required "
+        "level remain unspecified."
+    )
+    payload["ambiguities"] = []
+
+    compact = DiscoveryExtractionResponse.model_validate(payload)
+
+    with pytest.raises(DiscoverySemanticValidationError) as excinfo:
+        compact.validate_semantics()
+    assert (
+        "incremental_requirements.0.priority",
+        "must_have_admits_unresolved_scope",
+    ) in excinfo.value.issues
+
+
+def test_must_have_requirement_with_a_fully_specified_description_is_allowed() -> None:
+    payload = marketing_intern_compact_payload()
+    payload["incremental_requirements"][0]["priority"] = "must_have"
+    payload["incremental_requirements"][0]["description"] = (
+        "The manager explicitly asked for daily TikTok and Instagram posting "
+        "on the brand's existing accounts."
+    )
+    payload["ambiguities"] = []
+
+    compact = DiscoveryExtractionResponse.model_validate(payload)
+
+    compact.validate_semantics()
+
+
+def _compact_requirement_from_recorded(item: dict[str, object]) -> dict[str, object]:
+    """Map a recorded domain Requirement back to its compact provider shape."""
+    return {
+        "category": item["category"],
+        "name": item["name"],
+        "description": item["description"],
+        "priority": item["priority"],
+        "rationale": item["business_rationale"],
+        "source_statement": item["source_statement"],
+    }
+
+
+def _compact_payload_from_recorded_turn(
+    turn: dict[str, object],
+) -> dict[str, object]:
+    """Reconstruct the compact provider payload that produced a recorded live turn."""
+    return {
+        "incremental_requirements": [
+            _compact_requirement_from_recorded(item)
+            for item in turn["extracted_requirements"]
+        ],
+        "assumptions": [
+            {
+                "statement": item["statement"],
+                "source_statement": item["source_statement"],
+            }
+            for item in turn["assumptions"]
+        ],
+        "ambiguities": [
+            {
+                "description": item["description"],
+                "source_statement": item["source_statement"],
+                "why_confirmation_is_needed": item["why_confirmation_is_needed"],
+            }
+            for item in turn["ambiguities"]
+        ],
+        "possible_contradictions": [
+            {
+                "description": item["description"],
+                "source_statements": item["source_statements"],
+            }
+            for item in turn["contradictions"]
+        ],
+        "next_question": turn["next_question"]["question"],
+        "stage_recommendation": "stay",
+    }
+
+
+def test_live_marketing_intern_fixture_is_caught_by_semantic_validation() -> None:
+    """Recorded 2026-07-23 live OpenRouter run: every one of its four extracted
+    requirements was marked must_have from the same sentence it also listed as an
+    unresolved ambiguity (social media scope, TikTok scope, campaign scope, and
+    summer dates). This is more systemic than a single bad field: turn one
+    over-committed to must_have status before any clarifying answer existed. This
+    regression test locks in the fix for that inconsistency."""
+    recorded = json.loads(
+        (ROOT / "data" / "fixtures" / "marketing_intern_initial_output.json").read_text(
+            encoding="utf-8"
+        )
+    )
+    compact_payload = _compact_payload_from_recorded_turn(
+        recorded["validated_discovery_turn_result"]
+    )
+    compact = DiscoveryExtractionResponse.model_validate(compact_payload)
+
+    with pytest.raises(DiscoverySemanticValidationError) as excinfo:
+        compact.validate_semantics()
+
+    triggered_indices = {
+        int(location.split(".")[1])
+        for location, code in excinfo.value.issues
+        if code == "must_have_conflicts_with_unresolved_ambiguity"
+    }
+    assert triggered_indices == {0, 1, 2, 3}
+
+    for requirement in compact_payload["incremental_requirements"]:
+        requirement["priority"] = "preferred"
+    DiscoveryExtractionResponse.model_validate(compact_payload).validate_semantics()
+
+
+def test_must_have_requirement_with_no_overlapping_ambiguity_is_allowed() -> None:
+    payload = marketing_intern_compact_payload()
+    payload["incremental_requirements"][0]["priority"] = "must_have"
+    payload["incremental_requirements"][0]["description"] = (
+        "The manager explicitly asked for social media posting on the brand's "
+        "existing TikTok and Instagram accounts."
+    )
+    payload["ambiguities"] = [
+        {
+            "description": "The reporting line has not been identified.",
+            "source_statement": "We need a Marketing Intern for summer.",
+            "why_confirmation_is_needed": "The team and manager are unknown.",
+        }
+    ]
+
+    compact = DiscoveryExtractionResponse.model_validate(payload)
+
+    compact.validate_semantics()
+
+
 def test_discovery_prompt_requires_safe_narrow_extraction() -> None:
     prompt = (ROOT / "prompts" / "discovery.md").read_text(encoding="utf-8").lower()
 
@@ -205,5 +382,8 @@ def test_discovery_prompt_requires_safe_narrow_extraction() -> None:
         'stage_recommendation` must be exactly `"stay"` or `"advance"',
         "do not output a workflow stage name",
         "return only",
+        "same unresolved phrase",
+        "default to `preferred`",
+        "hedging words",
     ):
         assert expected_instruction in prompt
