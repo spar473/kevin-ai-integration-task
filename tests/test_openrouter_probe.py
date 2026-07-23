@@ -10,12 +10,11 @@ import pytest
 
 from scripts import openrouter_probe
 from src.config import Settings
-from src.llm_client import (
-    OpenRouterClient,
+from src.llm_client import OpenRouterClient, build_strict_json_schema
+from src.llm_diagnostics import (
     OpenRouterEndpointProbeClient,
     OpenRouterModelLookupClient,
     OpenRouterPreflightClient,
-    build_strict_json_schema,
 )
 from src.models import DiscoveryExtractionResponse
 

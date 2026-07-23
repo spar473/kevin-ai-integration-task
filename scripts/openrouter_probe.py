@@ -1,4 +1,4 @@
-"""Thin CLI for safe OpenRouter diagnostics implemented in ``src.llm_client``."""
+"""Thin CLI for safe OpenRouter diagnostics implemented in ``src.llm_diagnostics``."""
 
 from __future__ import annotations
 
@@ -15,7 +15,7 @@ if str(ROOT) not in sys.path:
     sys.path.insert(0, str(ROOT))
 
 from src.config import Settings  # noqa: E402
-from src.llm_client import (  # noqa: E402
+from src.llm_diagnostics import (  # noqa: E402
     OpenRouterEndpointProbeClient,
     OpenRouterModelLookupClient,
     OpenRouterPreflightClient,
