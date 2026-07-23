@@ -12,6 +12,7 @@ from src.models import (
     RoleSpecification,
     WorkflowStage,
 )
+from src.readiness import approval_blockers
 
 
 DISCOVERY_STAGES: tuple[WorkflowStage, ...] = tuple(WorkflowStage)
@@ -46,45 +47,6 @@ class WorkflowState(BaseModel):
     current_stage: WorkflowStage = WorkflowStage.BASIC_INFO
     confirmed_stages: set[WorkflowStage] = Field(default_factory=set)
     current_question: ClarificationQuestion | None = None
-
-
-def approval_blockers(role: RoleSpecification) -> list[str]:
-    """Return critical gaps that prevent manager approval."""
-    blockers: list[str] = []
-    basic = role.basic_info
-    if not basic.title:
-        blockers.append("Role title is missing.")
-    if basic.role_family is None:
-        blockers.append("Role family is missing.")
-    if basic.role_level is None:
-        blockers.append("Role level is missing.")
-    if basic.employment_type is None:
-        blockers.append("Employment type is missing.")
-    if not role.business_need.problem:
-        blockers.append("Business need is missing.")
-    if not role.success_outcomes:
-        blockers.append("At least one success outcome is required.")
-    if not role.responsibilities:
-        blockers.append("At least one responsibility is required.")
-    if not any(
-        item.priority is RequirementPriority.MUST_HAVE
-        for item in role.requirements
-    ):
-        blockers.append("At least one justified must-have requirement is required.")
-    if not role.assessment_methods:
-        blockers.append("At least one assessment method is required.")
-    if not role.decision_owner:
-        blockers.append("A human decision owner is required.")
-    if any(
-        not item.resolved and item.severity in {"high", "critical"}
-        for item in role.quality.contradictions
-    ):
-        blockers.append("High or critical contradictions must be resolved.")
-    blockers.extend(
-        f"Critical field remains missing: {field_name}"
-        for field_name in role.quality.critical_missing_fields
-    )
-    return blockers
 
 
 def stage_is_complete(state: WorkflowState, stage: WorkflowStage) -> bool:

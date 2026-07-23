@@ -52,6 +52,15 @@ def valid_role() -> RoleSpecification:
     )
 
 
+def test_role_parent_version_must_precede_current_version() -> None:
+    with pytest.raises(ValueError, match="parent_version"):
+        RoleSpecification(
+            role_id="role_invalid_version",
+            version=2,
+            parent_version=2,
+        )
+
+
 def test_valid_role_specification_and_human_approval_default() -> None:
     role = valid_role()
 

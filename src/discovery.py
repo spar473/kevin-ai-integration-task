@@ -20,6 +20,9 @@ from src.models import (
     DiscoveryAssumption,
     DiscoveryExtractionResponse,
     DiscoveryTurnResult,
+    Requirement,
+    RequirementPriority,
+    ReviewStatus,
     RoleSpecification,
     UnresolvedAmbiguity,
     WorkflowStage,
@@ -30,6 +33,13 @@ from src.workflow import WorkflowState, resolve_next_stage
 _PROMPT_PATH = Path(__file__).resolve().parent.parent / "prompts" / "discovery.md"
 
 _OpenItemT = TypeVar("_OpenItemT", bound=DiscoveryAssumption | UnresolvedAmbiguity)
+
+
+class RequirementNotFoundError(ValueError):
+    """Raised when a manager edit targets an unknown requirement."""
+
+    def __init__(self, requirement_id: str) -> None:
+        super().__init__(f"Requirement was not found: {requirement_id}")
 
 
 @lru_cache(maxsize=1)
@@ -218,6 +228,7 @@ def apply_discovery_turn(
                     ]
                 }
             ),
+            "parent_version": role.version,
             "version": role.version + 1,
             "audit": role.audit.model_copy(
                 update={"updated_at": datetime.now(UTC)}
@@ -250,4 +261,110 @@ def take_discovery_turn(
             "current_stage": resolved_stage,
             "current_question": turn.next_question,
         }
+    )
+
+
+def _requirement_index(role: RoleSpecification, requirement_id: str) -> int:
+    for index, item in enumerate(role.requirements):
+        if item.requirement_id == requirement_id:
+            return index
+    raise RequirementNotFoundError(requirement_id)
+
+
+def _manager_revised_role(
+    role: RoleSpecification,
+    requirements: list[Requirement],
+    *,
+    edited_at: datetime | None = None,
+) -> RoleSpecification:
+    """Create a new role version and invalidate approval after a manager edit."""
+    timestamp = edited_at or datetime.now(UTC)
+    review_status = (
+        ReviewStatus.NEEDS_REVIEW
+        if role.human_approved or role.review_status is ReviewStatus.APPROVED
+        else role.review_status
+    )
+    return role.model_copy(
+        update={
+            "requirements": requirements,
+            "parent_version": role.version,
+            "version": role.version + 1,
+            "review_status": review_status,
+            "human_approved": False,
+            "approved_by": None,
+            "approved_at": None,
+            "approved_sections": [],
+            "audit": role.audit.model_copy(update={"updated_at": timestamp}),
+        }
+    )
+
+
+def edit_requirement(
+    role: RoleSpecification,
+    requirement_id: str,
+    *,
+    name: str,
+    description: str | None,
+    priority: RequirementPriority,
+    business_rationale: str | None,
+    edited_at: datetime | None = None,
+) -> RoleSpecification:
+    """Apply a manager-confirmed edit while preserving source provenance."""
+    index = _requirement_index(role, requirement_id)
+    current = role.requirements[index]
+    payload = current.model_dump()
+    payload.update(
+        {
+            "name": name.strip(),
+            "description": (
+                description.strip()
+                if description and description.strip()
+                else None
+            ),
+            "priority": priority,
+            "business_rationale": (
+                business_rationale.strip()
+                if business_rationale and business_rationale.strip()
+                else None
+            ),
+            "requires_confirmation": False,
+            "approved_by_human": True,
+        }
+    )
+    updated_requirement = Requirement.model_validate(payload)
+    requirements = list(role.requirements)
+    requirements[index] = updated_requirement
+    return _manager_revised_role(role, requirements, edited_at=edited_at)
+
+
+def delete_requirement(
+    role: RoleSpecification,
+    requirement_id: str,
+    *,
+    edited_at: datetime | None = None,
+) -> RoleSpecification:
+    """Delete exactly one manager-confirmed requirement."""
+    index = _requirement_index(role, requirement_id)
+    requirements = list(role.requirements)
+    requirements.pop(index)
+    return _manager_revised_role(role, requirements, edited_at=edited_at)
+
+
+def change_requirement_priority(
+    role: RoleSpecification,
+    requirement_id: str,
+    priority: RequirementPriority,
+    *,
+    edited_at: datetime | None = None,
+) -> RoleSpecification:
+    """Change only requirement priority, validating must-have rationale."""
+    current = role.requirements[_requirement_index(role, requirement_id)]
+    return edit_requirement(
+        role,
+        requirement_id,
+        name=current.name,
+        description=current.description,
+        priority=priority,
+        business_rationale=current.business_rationale,
+        edited_at=edited_at,
     )

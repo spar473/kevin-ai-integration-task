@@ -134,6 +134,16 @@ class ReviewStatus(str, Enum):
     APPROVED = "approved"
 
 
+class ApprovalSection(str, Enum):
+    """Role areas a manager must explicitly confirm before approval."""
+
+    BUSINESS_PURPOSE = "business_purpose"
+    OUTCOMES = "outcomes"
+    MUST_HAVES = "must_haves"
+    BEHAVIOURAL_CRITERIA = "behavioural_criteria"
+    KEY_CONSTRAINTS = "key_constraints"
+
+
 class BasicRoleInfo(DomainModel):
     """Known basic facts about a role; discovery may leave fields unknown."""
 
@@ -179,6 +189,7 @@ class Responsibility(DomainModel):
     description: NonEmptyText
     frequency: str | None = None
     ownership_level: str | None = None
+    priority: RequirementPriority | None = None
     source_statement: str | None = None
     confidence: Confidence | None = None
 
@@ -253,6 +264,17 @@ class Contradiction(DomainModel):
     source_statements: list[str] = Field(min_length=1)
     resolution: str | None = None
     resolved: bool = False
+    resolved_by: str | None = None
+    resolved_at: datetime | None = None
+
+
+class WarningAcknowledgement(DomainModel):
+    """Human acknowledgement of a warning that remains visible in the log."""
+
+    warning_id: NonEmptyText
+    warning: NonEmptyText
+    acknowledged_by: NonEmptyText
+    acknowledged_at: datetime
 
 
 class RoleQuality(DomainModel):
@@ -263,6 +285,9 @@ class RoleQuality(DomainModel):
     ambiguities: list[str] = Field(default_factory=list)
     contradictions: list[Contradiction] = Field(default_factory=list)
     warnings: list[str] = Field(default_factory=list)
+    warning_acknowledgements: list[WarningAcknowledgement] = Field(
+        default_factory=list
+    )
 
 
 class AuditMetadata(DomainModel):
@@ -308,6 +333,7 @@ class RoleSpecification(DomainModel):
 
     role_id: NonEmptyText
     version: Annotated[int, Field(ge=1)] = 1
+    parent_version: Annotated[int, Field(ge=1)] | None = None
     review_status: ReviewStatus = ReviewStatus.DRAFT
     basic_info: BasicRoleInfo = Field(default_factory=BasicRoleInfo)
     business_need: BusinessNeed = Field(default_factory=BusinessNeed)
@@ -325,6 +351,13 @@ class RoleSpecification(DomainModel):
     human_approved: bool = False
     approved_by: str | None = None
     approved_at: datetime | None = None
+    approved_sections: list[ApprovalSection] = Field(default_factory=list)
+
+    @model_validator(mode="after")
+    def parent_version_must_precede_version(self) -> RoleSpecification:
+        if self.parent_version is not None and self.parent_version >= self.version:
+            raise ValueError("parent_version must be lower than version")
+        return self
 
 
 def _source_statements_overlap(first: str, second: str) -> bool:
@@ -579,7 +612,9 @@ class DiscoveryExtractionResponse(ProviderDiscoveryModel):
             Contradiction(
                 contradiction_id=f"contradiction_{index:03d}",
                 description=item.description,
-                severity="low",
+                severity=_classify_discovery_contradiction(
+                    item.description, item.source_statements
+                ),
                 source_statements=list(item.source_statements),
                 resolution=None,
                 resolved=False,
@@ -599,6 +634,21 @@ class DiscoveryExtractionResponse(ProviderDiscoveryModel):
             ),
             confidence=None,
         )
+
+
+def _classify_discovery_contradiction(
+    description: str, source_statements: list[str]
+) -> str:
+    """Classify a provider-suggested conflict using deterministic rules."""
+    from src.readiness import classify_contradiction_severity
+
+    provisional = Contradiction(
+        contradiction_id="provisional",
+        description=description,
+        severity="low",
+        source_statements=source_statements,
+    )
+    return classify_contradiction_severity(provisional)
 
 
 class DiscoveryTurnResult(DomainModel):

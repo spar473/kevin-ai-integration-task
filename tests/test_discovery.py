@@ -11,9 +11,13 @@ from __future__ import annotations
 import pytest
 
 from src.discovery import (
+    RequirementNotFoundError,
     apply_discovery_turn,
     build_discovery_messages,
+    change_requirement_priority,
+    delete_requirement,
     discovery_system_prompt,
+    edit_requirement,
     render_role_context,
     run_discovery_turn,
     take_discovery_turn,
@@ -23,6 +27,10 @@ from src.models import (
     BasicRoleInfo,
     DiscoveryExtractionResponse,
     EmploymentType,
+    Requirement,
+    RequirementCategory,
+    RequirementPriority,
+    ReviewStatus,
     RoleFamily,
     RoleLevel,
     RoleSpecification,
@@ -239,6 +247,7 @@ def test_apply_discovery_turn_appends_requirements_with_fresh_ids() -> None:
     updated = apply_discovery_turn(empty_role(), turn)
 
     assert [item.requirement_id for item in updated.requirements] == ["requirement_001"]
+    assert updated.parent_version == 1
     assert updated.version == 2
 
 
@@ -346,3 +355,115 @@ def test_take_discovery_turn_advances_once_the_stage_is_complete() -> None:
     )
 
     assert updated_state.current_stage is WorkflowStage.BUSINESS_NEED
+
+
+# ---------------------------------------------------------------------------
+# Explicit manager edits: preserve provenance and invalidate stale approval
+# ---------------------------------------------------------------------------
+
+
+def editable_role() -> RoleSpecification:
+    return role_with_basic_info().model_copy(
+        update={
+            "version": 4,
+            "human_approved": True,
+            "approved_by": "Hiring Manager",
+            "review_status": ReviewStatus.APPROVED,
+            "requirements": [
+                Requirement(
+                    requirement_id="requirement_001",
+                    category=RequirementCategory.DOMAIN,
+                    name="Social content awareness",
+                    description="Understand the main social channels.",
+                    priority=RequirementPriority.PREFERRED,
+                    business_rationale="Supports campaign delivery.",
+                    source_statement="They should be good with social media.",
+                    requires_confirmation=True,
+                )
+            ],
+        }
+    )
+
+
+def test_edit_requirement_preserves_source_and_invalidates_stale_approval() -> None:
+    role = editable_role()
+
+    updated = edit_requirement(
+        role,
+        "requirement_001",
+        name="Social campaign planning",
+        description="Plan a weekly channel experiment.",
+        priority=RequirementPriority.MUST_HAVE,
+        business_rationale="The role owns the weekly campaign plan.",
+    )
+
+    item = updated.requirements[0]
+    assert item.name == "Social campaign planning"
+    assert item.source_statement == "They should be good with social media."
+    assert item.approved_by_human is True
+    assert item.requires_confirmation is False
+    assert updated.parent_version == 4
+    assert updated.version == 5
+    assert updated.human_approved is False
+    assert updated.approved_by is None
+    assert updated.review_status is ReviewStatus.NEEDS_REVIEW
+
+
+def test_delete_requirement_removes_only_the_selected_requirement() -> None:
+    role = editable_role().model_copy(
+        update={
+            "requirements": [
+                *editable_role().requirements,
+                Requirement(
+                    requirement_id="requirement_002",
+                    category=RequirementCategory.TECHNICAL,
+                    name="Spreadsheet reporting",
+                    priority=RequirementPriority.PREFERRED,
+                    source_statement="Reporting would be helpful.",
+                ),
+            ]
+        }
+    )
+
+    updated = delete_requirement(role, "requirement_001")
+
+    assert [item.requirement_id for item in updated.requirements] == [
+        "requirement_002"
+    ]
+    assert updated.parent_version == 4
+    assert updated.version == 5
+
+
+def test_requirement_edit_raises_for_unknown_id() -> None:
+    with pytest.raises(RequirementNotFoundError):
+        delete_requirement(editable_role(), "requirement_missing")
+
+
+def test_priority_change_to_must_have_requires_business_rationale() -> None:
+    role = editable_role()
+    requirement = role.requirements[0].model_copy(
+        update={"business_rationale": None}
+    )
+    role = role.model_copy(update={"requirements": [requirement]})
+
+    with pytest.raises(ValueError, match="business_rationale"):
+        change_requirement_priority(
+            role,
+            "requirement_001",
+            RequirementPriority.MUST_HAVE,
+        )
+
+
+def test_priority_change_preserves_other_requirement_fields() -> None:
+    role = editable_role()
+
+    updated = change_requirement_priority(
+        role,
+        "requirement_001",
+        RequirementPriority.OPTIONAL,
+    )
+
+    item = updated.requirements[0]
+    assert item.priority is RequirementPriority.OPTIONAL
+    assert item.name == role.requirements[0].name
+    assert item.source_statement == role.requirements[0].source_statement
