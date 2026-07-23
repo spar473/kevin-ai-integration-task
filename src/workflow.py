@@ -5,6 +5,7 @@ from __future__ import annotations
 from pydantic import BaseModel, ConfigDict, Field
 
 from src.models import (
+    ClarificationQuestion,
     DiscoveryProgressRecommendation,
     Learnability,
     RequirementPriority,
@@ -44,6 +45,7 @@ class WorkflowState(BaseModel):
     role_specification: RoleSpecification
     current_stage: WorkflowStage = WorkflowStage.BASIC_INFO
     confirmed_stages: set[WorkflowStage] = Field(default_factory=set)
+    current_question: ClarificationQuestion | None = None
 
 
 def approval_blockers(role: RoleSpecification) -> list[str]:
@@ -151,3 +153,22 @@ def next_incomplete_stage(state: WorkflowState) -> WorkflowStage:
 def advance_workflow(state: WorkflowState) -> WorkflowState:
     """Return a copied state positioned at its next incomplete stage."""
     return state.model_copy(update={"current_stage": next_incomplete_stage(state)})
+
+
+def resolve_next_stage(
+    state: WorkflowState, recommended_stage: WorkflowStage
+) -> WorkflowStage:
+    """Gate a model-recommended stage behind deterministic stage completeness.
+
+    ``recommended_stage`` is the mechanical stay/advance mapping already produced
+    by :func:`progress_recommendation_stage`. The model's "advance" is only
+    non-binding routing advice: the application blocks it whenever the current
+    stage's own minimum information is still incomplete, so a role can never
+    progress past a stage with missing critical fields no matter what the model
+    recommends.
+    """
+    if recommended_stage == state.current_stage:
+        return state.current_stage
+    if not stage_is_complete(state, state.current_stage):
+        return state.current_stage
+    return recommended_stage
