@@ -1,0 +1,218 @@
+{
+  "persona_key": "culture_focused_manager",
+  "persona_label": "Persona C: Culture-focused manager",
+  "brief_source": "docs/ZURU_AI_Integration_Internship_Codex_Context.md \u00a73.5 Persona C",
+  "documented_expected_behaviour": [
+    "Convert subjective culture language into observable workplace behaviours.",
+    "Avoid assessing similarity, likeability, or background resemblance.",
+    "Link behaviours to role situations and ZURU DNA."
+  ],
+  "initial_manager_statement": "Skills can be taught. I need someone who gets our vibe.",
+  "turns": [
+    {
+      "turn_index": 1,
+      "stage_before": "basic_info",
+      "manager_message": "Skills can be taught. I need someone who gets our vibe.",
+      "stage_after": "basic_info",
+      "next_question": {
+        "question_id": "question_001",
+        "question": "What observable, job-relevant behaviours would show that someone \u201cgets our vibe\u201d?",
+        "target_stage": "basic_info",
+        "purpose": null
+      },
+      "new_requirement_count": 0
+    },
+    {
+      "turn_index": 2,
+      "stage_before": "basic_info",
+      "manager_message": "You know, just someone who'd fit right in with the team at the pub on a Friday, laughs at the same jokes, doesn't take themselves too seriously. If I click with them in the interview, that's usually a good sign.",
+      "stage_after": "basic_info",
+      "next_question": {
+        "question_id": "question_001",
+        "question": "What specific observable, job-related collaboration or communication behaviours do you need from this Brand Coordinator?",
+        "target_stage": "basic_info",
+        "purpose": null
+      },
+      "new_requirement_count": 0
+    },
+    {
+      "turn_index": 3,
+      "stage_before": "basic_info",
+      "manager_message": "Okay, concretely: when a campaign deadline moves up and priorities clash, they need to say so directly to the team instead of quietly resenting it, and they should offer to help a teammate who's behind even when it's not their job.",
+      "stage_after": "business_need",
+      "next_question": {
+        "question_id": "question_001",
+        "question": "What specific channels or escalation approach should they use to raise campaign deadline and priority conflicts with the team?",
+        "target_stage": "business_need",
+        "purpose": null
+      },
+      "new_requirement_count": 2
+    },
+    {
+      "turn_index": 4,
+      "stage_before": "business_need",
+      "manager_message": "They should raise it in our weekly stand-up or directly to me, not just vent to teammates. And yes, this connects to being a good human on the team and pulling together, not just being liked.",
+      "stage_after": "business_need",
+      "next_question": {
+        "question_id": "question_001",
+        "question": "What specific observable teamwork behaviours should demonstrate \u201cpulling together\u201d in this role?",
+        "target_stage": "business_need",
+        "purpose": null
+      },
+      "new_requirement_count": 1
+    }
+  ],
+  "rejected_turns": [
+    {
+      "note": "The same must-have/ambiguity overlap guard also fired here, on a compound behavioural answer (two distinct behavioural expectations in one sentence). A retry against the same input passed the next attempt, confirming the pass/fail split is due to provider-side sampling variance on an otherwise fixed prompt, not the input itself. See docs/DECISIONS_AND_LESSONS.md entry 2026-07-24.",
+      "manager_message": "Okay, concretely: when a campaign deadline moves up and priorities clash, they need to say so directly to the team instead of quietly resenting it, and they should offer to help a teammate who's behind even when it's not their job."
+    }
+  ],
+  "zuru_dna_behaviours_never_populated_by_discovery": true,
+  "final_role_specification": {
+    "role_id": "role_live_culture_focused_manager",
+    "version": 5,
+    "parent_version": 4,
+    "review_status": "draft",
+    "basic_info": {
+      "title": "Brand Coordinator",
+      "role_family": "marketing",
+      "role_level": "entry",
+      "employment_type": "permanent",
+      "division": null,
+      "team": null,
+      "location": null,
+      "work_arrangement": null,
+      "reporting_to": null,
+      "start_date": null,
+      "end_date": null,
+      "initial_manager_statement": "Skills can be taught. I need someone who gets our vibe."
+    },
+    "business_need": {
+      "problem": null,
+      "why_now": null,
+      "cost_of_vacancy": null,
+      "is_replacement": null
+    },
+    "success_outcomes": [],
+    "responsibilities": [],
+    "requirements": [
+      {
+        "requirement_id": "requirement_001",
+        "category": "behavioural",
+        "name": "Directly communicate deadline and priority conflicts",
+        "description": "Communicate directly to the team when a campaign deadline moves up and priorities clash, rather than withholding concerns.",
+        "priority": "must_have",
+        "proficiency": null,
+        "learnability": null,
+        "accepted_equivalents": [],
+        "business_rationale": "The manager states that the person needs to raise these conflicts directly with the team.",
+        "evidence_methods": [],
+        "source_statement": "when a campaign deadline moves up and priorities clash, they need to say so directly to the team instead of quietly resenting it",
+        "source_turn_id": "initial_manager_statement",
+        "confidence": null,
+        "requires_confirmation": true,
+        "approved_by_human": false
+      },
+      {
+        "requirement_id": "requirement_002",
+        "category": "behavioural",
+        "name": "Proactively support behind teammates",
+        "description": "Offer help to a teammate who is behind, including when the work is outside the person's formal job responsibilities.",
+        "priority": "preferred",
+        "proficiency": null,
+        "learnability": null,
+        "accepted_equivalents": [],
+        "business_rationale": "The manager says the person should offer help in this situation, using 'should' rather than an explicit mandatory statement.",
+        "evidence_methods": [],
+        "source_statement": "they should offer to help a teammate who's behind even when it's not their job",
+        "source_turn_id": "initial_manager_statement",
+        "confidence": null,
+        "requires_confirmation": true,
+        "approved_by_human": false
+      },
+      {
+        "requirement_id": "requirement_003",
+        "category": "behavioural",
+        "name": "Raise issues through appropriate channels",
+        "description": "Raise relevant issues in the weekly stand-up or directly to the manager rather than only venting to teammates.",
+        "priority": "must_have",
+        "proficiency": null,
+        "learnability": null,
+        "accepted_equivalents": [],
+        "business_rationale": "The manager specifies the expected ways for issues to be raised and contrasts them with only venting to teammates.",
+        "evidence_methods": [],
+        "source_statement": "They should raise it in our weekly stand-up or directly to me, not just vent to teammates.",
+        "source_turn_id": "initial_manager_statement",
+        "confidence": null,
+        "requires_confirmation": true,
+        "approved_by_human": false
+      }
+    ],
+    "open_assumptions": [],
+    "open_ambiguities": [
+      {
+        "ambiguity_id": "ambiguity_001",
+        "description": "\u201cGets our vibe\u201d is subjective culture-fit language and does not identify observable, job-relevant behaviours or working expectations. The manager needs to clarify the specific behaviours, collaboration style, or brand-related understanding required.",
+        "source_statement": "Skills can be taught. I need someone who gets our vibe.",
+        "why_confirmation_is_needed": "It cannot be translated into a fair, assessable role requirement without concrete examples."
+      },
+      {
+        "ambiguity_id": "ambiguity_002",
+        "description": "The message uses subjective social and interview-rapport preferences rather than observable, job-relevant behaviours. The manager needs to clarify which work-related collaboration, communication, or brand-related behaviours are required.",
+        "source_statement": "You know, just someone who'd fit right in with the team at the pub on a Friday, laughs at the same jokes, doesn't take themselves too seriously. If I click with them in the interview, that's usually a good sign.",
+        "why_confirmation_is_needed": "Social similarity, humour, and interviewer rapport are not defined job requirements and need to be translated into observable work expectations."
+      },
+      {
+        "ambiguity_id": "ambiguity_003",
+        "description": "The reference to \u201cbeing a good human on the team and pulling together\u201d is subjective and does not specify observable, job-relevant collaborative behaviours. The manager needs to clarify the specific teamwork behaviours expected.",
+        "source_statement": "And yes, this connects to being a good human on the team and pulling together, not just being liked.",
+        "why_confirmation_is_needed": "This phrasing could refer to different expectations, such as helping colleagues, communicating constructively, or contributing during shared work, and cannot be assessed consistently without defined behaviours."
+      }
+    ],
+    "zuru_dna_behaviours": [],
+    "constraints": {
+      "country": null,
+      "location": null,
+      "work_arrangement": null,
+      "work_rights": null,
+      "weekly_hours": null,
+      "travel": null,
+      "languages": [],
+      "jurisdiction_notes": []
+    },
+    "assessment_methods": [],
+    "decision_owner": null,
+    "quality": {
+      "readiness_score": null,
+      "contradictions": [],
+      "warnings": [],
+      "warning_acknowledgements": []
+    },
+    "audit": {
+      "schema_version": "1.0",
+      "created_at": "2026-07-23T22:54:23.564695Z",
+      "updated_at": "2026-07-23T22:56:31.743268Z",
+      "model": null,
+      "prompt_version": null,
+      "source_ids": []
+    },
+    "human_approved": false,
+    "approved_by": null,
+    "approved_at": null,
+    "approved_sections": []
+  },
+  "final_quality_report": {
+    "readiness_score": 20,
+    "readiness_interpretation": "not ready",
+    "vague_phrases": [],
+    "excessive_requirement_issues": [],
+    "blockers": [
+      "Business need is missing.",
+      "At least one success outcome is required.",
+      "At least one responsibility is required.",
+      "At least one assessment method is required.",
+      "A human decision owner is required."
+    ]
+  }
+}

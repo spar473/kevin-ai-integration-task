@@ -12,6 +12,49 @@ anchors, deterministic confidence, contradiction handling, prompt-injection
 controls, persistence, and explicit human review. CV parsing remains a later,
 optional phase.
 
+## Limitations and known gaps
+
+Honest, presentation-ready summary of what this prototype does not yet do.
+Full technical detail, evidence, and reasoning for every item below is in
+[docs/DECISIONS_AND_LESSONS.md](docs/DECISIONS_AND_LESSONS.md).
+
+- **Confidence is a decision-support heuristic, not a validated probability.**
+  It reflects evidence specificity and consistency, not a calibrated
+  statistical estimate -- treat it as a routing signal for human review, not
+  a score.
+- **A manager's compliant, concrete, prioritised answer can still be
+  rejected** if phrased as one dense sentence, because the model sometimes
+  quotes the whole sentence as source for both a `must_have` requirement and
+  its own follow-up ambiguity, tripping the must-have/ambiguity overlap
+  guard. The guard is intentionally kept strict rather than loosened; the
+  open follow-up is to surface *which clause* overlapped in the UI instead
+  of today's generic error, so a manager knows to split their answer rather
+  than guess why it failed.
+- **Discovery only ever extracts requirements, assumptions, and
+  ambiguities.** Business need, success outcomes, responsibilities,
+  constraints, the assessment plan, and ZURU DNA behaviours are completed by
+  a human directly in the "Review Role" tab, not inferred by the model from
+  conversation -- a deliberate choice to keep business decisions with a
+  human, not a coverage shortfall to be closed by prompting the model
+  differently.
+- **Technical vs. creative role probing is verified, not engineered.** There
+  is no explicit branching logic for role family in the discovery prompt;
+  live testing showed the model differentiates its questions correctly on
+  its own (systems/integration for technical roles, channel/portfolio/
+  approval process for creative roles) across a handful of turns each. This
+  has not been verified for every role family, or beyond a short
+  conversation.
+- **Resolved ambiguities can stay listed as open.** An ambiguity is only
+  replaced when a later turn's wording string-matches the original phrase
+  exactly; a topic resolved in different words remains listed. Don't treat
+  `open_ambiguities` count as a reliable completeness signal late in a
+  conversation.
+- **Country-specific legal review, learning from past hiring outcomes, and
+  real candidate data are explicitly out of scope.** This prototype uses
+  synthetic candidate data only; production use would need jurisdiction
+  configuration reviewed by legal/HR, and any outcome-based learning would
+  need an audited approach to avoid reproducing historical bias.
+
 ## Repository structure
 
 ```text

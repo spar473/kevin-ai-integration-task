@@ -287,6 +287,34 @@ def record_requirement_edit(
     return result
 
 
+def record_role_section_edit(
+    audit_log: AuditLog,
+    *,
+    previous_role: RoleSpecification,
+    updated_role: RoleSpecification,
+    section: str,
+) -> AuditLog:
+    """Record a manager edit to a non-requirement role section.
+
+    Section-level, not per-field: ``record_requirement_edit`` diffs
+    individual fields because it audits one row in a list of many; the
+    sections here (business need, outcomes, responsibilities, constraints,
+    the assessment plan, ZURU DNA behaviours) are edited and reviewed as a
+    whole, so the section label plus the resulting role version is enough
+    to reconstruct what changed from the stored role snapshots.
+    """
+    return append_audit_event(
+        audit_log,
+        AuditEventType.MANAGER_EDIT,
+        role=updated_role,
+        actor="manager",
+        metadata={
+            "section": section,
+            "previous_role_version": previous_role.version,
+        },
+    )
+
+
 def record_new_contradictions(
     audit_log: AuditLog,
     *,

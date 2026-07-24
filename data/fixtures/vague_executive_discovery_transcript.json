@@ -1,0 +1,424 @@
+{
+  "persona_key": "vague_executive",
+  "persona_label": "Persona A: Vague executive",
+  "brief_source": "docs/ZURU_AI_Integration_Internship_Codex_Context.md \u00a73.5 Persona A",
+  "documented_expected_behaviour": [
+    "Break the statement into outcomes, priorities, scope, and trade-offs.",
+    "Ask for concrete examples.",
+    "Force prioritisation rather than recording vague adjectives."
+  ],
+  "initial_manager_statement": "I need a superstar who can do a bit of everything.",
+  "turns": [
+    {
+      "turn_index": 1,
+      "stage_before": "basic_info",
+      "manager_message": "I need a superstar who can do a bit of everything.",
+      "stage_after": "basic_info",
+      "next_question": {
+        "question_id": "question_001",
+        "question": "What are the three most important growth responsibilities or outcomes this Head of Growth must own?",
+        "target_stage": "basic_info",
+        "purpose": null
+      },
+      "new_requirement_count": 0
+    },
+    {
+      "turn_index": 2,
+      "stage_before": "basic_info",
+      "manager_message": "Honestly, just whoever can jump in and handle whatever the business throws at them - sales, marketing, ops, whatever's on fire that week. I trust them to figure out the priorities themselves.",
+      "stage_after": "basic_info",
+      "next_question": {
+        "question_id": "question_001",
+        "question": "What are the three most important ongoing responsibilities this Head of Growth must own, rather than ad hoc support areas?",
+        "target_stage": "basic_info",
+        "purpose": null
+      },
+      "new_requirement_count": 2
+    },
+    {
+      "turn_index": 3,
+      "stage_before": "basic_info",
+      "manager_message": "My single most important priority is growing new-customer revenue by $2M this quarter, measured as the total value of new contracts signed with net-new logos.",
+      "stage_after": "basic_info",
+      "next_question": {
+        "question_id": "question_001",
+        "question": "What specific responsibilities and levers will this role own to deliver the $2M net-new contract target?",
+        "target_stage": "basic_info",
+        "purpose": null
+      },
+      "new_requirement_count": 1
+    },
+    {
+      "turn_index": 4,
+      "stage_before": "basic_info",
+      "manager_message": "This role directly owns outbound sales and partnership deal-sourcing to hit that target.",
+      "stage_after": "basic_info",
+      "next_question": {
+        "question_id": "question_001",
+        "question": "What other growth responsibilities, if any, are ongoing priorities beyond outbound sales and partnership deal-sourcing?",
+        "target_stage": "basic_info",
+        "purpose": null
+      },
+      "new_requirement_count": 2
+    },
+    {
+      "turn_index": 5,
+      "stage_before": "basic_info",
+      "manager_message": "Second priority: cut week-one onboarding drop-off from 40% to under 20%, owning the onboarding email sequence and product walkthrough end-to-end.",
+      "stage_after": "basic_info",
+      "next_question": {
+        "question_id": "question_001",
+        "question": "What is the measurement definition and reporting period for week-one onboarding drop-off?",
+        "target_stage": "basic_info",
+        "purpose": null
+      },
+      "new_requirement_count": 3
+    }
+  ],
+  "rejected_turns": [
+    {
+      "note": "Recorded live OpenRouter rejection. See docs/DECISIONS_AND_LESSONS.md entry 2026-07-24 'Compound prioritised answers can trip the must-have/ambiguity overlap guard'.",
+      "manager_message": "Fine, if I have to pick three: (1) hit a $2M quarterly growth target across new-customer revenue, (2) fix our onboarding funnel where we lose 40% of signups in week one, and (3) represent growth in board meetings when I can't attend. Everything else is secondary.",
+      "rejection_reason": "DiscoverySemanticValidationError: semantic_validation_failed",
+      "validation_field_locations": [
+        "incremental_requirements.0.priority",
+        "incremental_requirements.1.priority",
+        "incremental_requirements.2.priority"
+      ],
+      "validation_error_types": [
+        "must_have_conflicts_with_unresolved_ambiguity",
+        "must_have_conflicts_with_unresolved_ambiguity",
+        "must_have_conflicts_with_unresolved_ambiguity"
+      ]
+    },
+    {
+      "note": "A second, differently-worded compound answer, still fully specified with measurement definitions, triggers the same guard because the model quotes the entire multi-clause sentence as source_statement for both each must_have requirement and its own follow-up ambiguity about delivery scope.",
+      "manager_message": "Top priority: grow new-customer revenue by $2M this quarter, measured as total value of new contracts signed. Second priority: cut week-one onboarding drop-off from 40% to under 20%, measured from signup to completed first purchase. Third priority: represent growth at board meetings when I'm travelling, with authority to answer questions but not commit new spend.",
+      "raw_provider_response": {
+        "incremental_requirements": [
+          {
+            "category": "domain",
+            "name": "New-customer revenue growth",
+            "description": "Grow new-customer revenue by $2M during the quarter, measured as the total value of new contracts signed.",
+            "priority": "must_have",
+            "rationale": "The manager labels this as the top priority and provides a target, timeframe, and measurement method.",
+            "source_statement": "Top priority: grow new-customer revenue by $2M this quarter, measured as total value of new contracts signed."
+          },
+          {
+            "category": "domain",
+            "name": "Week-one onboarding drop-off reduction",
+            "description": "Reduce week-one onboarding drop-off from 40% to under 20%, measured from signup to completed first purchase.",
+            "priority": "must_have",
+            "rationale": "The manager labels this as the second priority and provides a baseline, target, and measurement definition.",
+            "source_statement": "Second priority: cut week-one onboarding drop-off from 40% to under 20%, measured from signup to completed first purchase."
+          },
+          {
+            "category": "behavioural",
+            "name": "Board-meeting representation",
+            "description": "Represent growth at board meetings when the manager is travelling, with authority to answer questions but not commit new spend.",
+            "priority": "must_have",
+            "rationale": "The manager explicitly identifies this as the third priority and states the authority boundary.",
+            "source_statement": "Third priority: represent growth at board meetings when I'm travelling, with authority to answer questions but not commit new spend."
+          }
+        ],
+        "ambiguities": [
+          {
+            "description": "The specific actions, channels, and responsibilities through which the role is expected to achieve the $2M new-customer revenue target are not stated.",
+            "source_statement": "Top priority: grow new-customer revenue by $2M this quarter, measured as total value of new contracts signed.",
+            "why_confirmation_is_needed": "The revenue outcome and measurement are defined, but the role's delivery scope is needed to establish accountable responsibilities."
+          },
+          {
+            "description": "The specific ownership and interventions expected to reduce onboarding drop-off are not stated.",
+            "source_statement": "Second priority: cut week-one onboarding drop-off from 40% to under 20%, measured from signup to completed first purchase.",
+            "why_confirmation_is_needed": "The metric definition and target are defined, but the role's scope across onboarding, product, customer experience, or other work is not."
+          },
+          {
+            "description": "The expected frequency of board-meeting representation and whether it applies to all board meetings during the manager's travel are not specified.",
+            "source_statement": "Third priority: represent growth at board meetings when I'm travelling, with authority to answer questions but not commit new spend.",
+            "why_confirmation_is_needed": "The trigger is stated generally, but the operational expectation for coverage is not defined."
+          }
+        ]
+      },
+      "validation_field_locations": [
+        "incremental_requirements.0.priority",
+        "incremental_requirements.1.priority",
+        "incremental_requirements.2.priority"
+      ],
+      "validation_error_types": [
+        "must_have_conflicts_with_unresolved_ambiguity",
+        "must_have_conflicts_with_unresolved_ambiguity",
+        "must_have_conflicts_with_unresolved_ambiguity"
+      ]
+    }
+  ],
+  "final_role_specification": {
+    "role_id": "role_live_vague_executive",
+    "version": 6,
+    "parent_version": 5,
+    "review_status": "draft",
+    "basic_info": {
+      "title": "Head of Growth",
+      "role_family": "executive",
+      "role_level": "executive",
+      "employment_type": "permanent",
+      "division": null,
+      "team": null,
+      "location": null,
+      "work_arrangement": null,
+      "reporting_to": null,
+      "start_date": null,
+      "end_date": null,
+      "initial_manager_statement": "I need a superstar who can do a bit of everything."
+    },
+    "business_need": {
+      "problem": null,
+      "why_now": null,
+      "cost_of_vacancy": null,
+      "is_replacement": null
+    },
+    "success_outcomes": [],
+    "responsibilities": [],
+    "requirements": [
+      {
+        "requirement_id": "requirement_001",
+        "category": "technical",
+        "name": "Cross-functional contribution across sales, marketing, and operations",
+        "description": "Ability to step in across sales, marketing, and operations as business needs arise.",
+        "priority": "preferred",
+        "proficiency": null,
+        "learnability": null,
+        "accepted_equivalents": [],
+        "business_rationale": "The manager explicitly identifies sales, marketing, and operations as areas the person may need to handle.",
+        "evidence_methods": [],
+        "source_statement": "Honestly, just whoever can jump in and handle whatever the business throws at them - sales, marketing, ops, whatever's on fire that week.",
+        "source_turn_id": "initial_manager_statement",
+        "confidence": null,
+        "requires_confirmation": true,
+        "approved_by_human": false
+      },
+      {
+        "requirement_id": "requirement_002",
+        "category": "behavioural",
+        "name": "Independent prioritization",
+        "description": "Ability to determine work priorities independently.",
+        "priority": "preferred",
+        "proficiency": null,
+        "learnability": null,
+        "accepted_equivalents": [],
+        "business_rationale": "The manager states that they expect the person to determine priorities themselves.",
+        "evidence_methods": [],
+        "source_statement": "I trust them to figure out the priorities themselves.",
+        "source_turn_id": "initial_manager_statement",
+        "confidence": null,
+        "requires_confirmation": true,
+        "approved_by_human": false
+      },
+      {
+        "requirement_id": "requirement_003",
+        "category": "domain",
+        "name": "New-customer revenue growth target",
+        "description": "Grow new-customer revenue by $2M within the quarter, measured by the total value of new contracts signed with net-new logos.",
+        "priority": "must_have",
+        "proficiency": null,
+        "learnability": null,
+        "accepted_equivalents": [],
+        "business_rationale": "The manager identifies this as the single most important priority and provides both a target and measurement definition.",
+        "evidence_methods": [],
+        "source_statement": "My single most important priority is growing new-customer revenue by $2M this quarter, measured as the total value of new contracts signed with net-new logos.",
+        "source_turn_id": "initial_manager_statement",
+        "confidence": null,
+        "requires_confirmation": true,
+        "approved_by_human": false
+      },
+      {
+        "requirement_id": "requirement_004",
+        "category": "domain",
+        "name": "Outbound sales ownership",
+        "description": "Direct ownership of outbound sales.",
+        "priority": "must_have",
+        "proficiency": null,
+        "learnability": null,
+        "accepted_equivalents": [],
+        "business_rationale": "The manager states that the role directly owns outbound sales.",
+        "evidence_methods": [],
+        "source_statement": "This role directly owns outbound sales and partnership deal-sourcing to hit that target.",
+        "source_turn_id": "initial_manager_statement",
+        "confidence": null,
+        "requires_confirmation": true,
+        "approved_by_human": false
+      },
+      {
+        "requirement_id": "requirement_005",
+        "category": "domain",
+        "name": "Partnership deal-sourcing ownership",
+        "description": "Direct ownership of partnership deal-sourcing.",
+        "priority": "must_have",
+        "proficiency": null,
+        "learnability": null,
+        "accepted_equivalents": [],
+        "business_rationale": "The manager states that the role directly owns partnership deal-sourcing.",
+        "evidence_methods": [],
+        "source_statement": "This role directly owns outbound sales and partnership deal-sourcing to hit that target.",
+        "source_turn_id": "initial_manager_statement",
+        "confidence": null,
+        "requires_confirmation": true,
+        "approved_by_human": false
+      },
+      {
+        "requirement_id": "requirement_006",
+        "category": "technical",
+        "name": "Onboarding email sequence ownership",
+        "description": "Own the onboarding email sequence end-to-end.",
+        "priority": "must_have",
+        "proficiency": null,
+        "learnability": null,
+        "accepted_equivalents": [],
+        "business_rationale": "The manager explicitly assigns end-to-end ownership of the onboarding email sequence.",
+        "evidence_methods": [],
+        "source_statement": "Second priority: cut week-one onboarding drop-off from 40% to under 20%, owning the onboarding email sequence and product walkthrough end-to-end.",
+        "source_turn_id": "initial_manager_statement",
+        "confidence": null,
+        "requires_confirmation": true,
+        "approved_by_human": false
+      },
+      {
+        "requirement_id": "requirement_007",
+        "category": "technical",
+        "name": "Product walkthrough ownership",
+        "description": "Own the product walkthrough end-to-end.",
+        "priority": "must_have",
+        "proficiency": null,
+        "learnability": null,
+        "accepted_equivalents": [],
+        "business_rationale": "The manager explicitly assigns end-to-end ownership of the product walkthrough.",
+        "evidence_methods": [],
+        "source_statement": "Second priority: cut week-one onboarding drop-off from 40% to under 20%, owning the onboarding email sequence and product walkthrough end-to-end.",
+        "source_turn_id": "initial_manager_statement",
+        "confidence": null,
+        "requires_confirmation": true,
+        "approved_by_human": false
+      },
+      {
+        "requirement_id": "requirement_008",
+        "category": "domain",
+        "name": "Week-one onboarding drop-off reduction target",
+        "description": "Reduce week-one onboarding drop-off from 40% to under 20%.",
+        "priority": "must_have",
+        "proficiency": null,
+        "learnability": null,
+        "accepted_equivalents": [],
+        "business_rationale": "The manager states this as the role's second priority with a defined current rate and target threshold.",
+        "evidence_methods": [],
+        "source_statement": "Second priority: cut week-one onboarding drop-off from 40% to under 20%, owning the onboarding email sequence and product walkthrough end-to-end.",
+        "source_turn_id": "initial_manager_statement",
+        "confidence": null,
+        "requires_confirmation": true,
+        "approved_by_human": false
+      }
+    ],
+    "open_assumptions": [
+      {
+        "assumption_id": "assumption_001",
+        "statement": "The manager appears to envision a role that can operate beyond a narrowly defined growth remit.",
+        "source_statement": "Honestly, just whoever can jump in and handle whatever the business throws at them - sales, marketing, ops, whatever's on fire that week.",
+        "requires_confirmation": true
+      },
+      {
+        "assumption_id": "assumption_002",
+        "statement": "Outbound sales and partnership deal-sourcing are intended to contribute toward the previously identified new-customer revenue growth target.",
+        "source_statement": "This role directly owns outbound sales and partnership deal-sourcing to hit that target.",
+        "requires_confirmation": true
+      },
+      {
+        "assumption_id": "assumption_003",
+        "statement": "The stated 40% baseline and under-20% target appear to refer to the same measurement of week-one onboarding drop-off.",
+        "source_statement": "Second priority: cut week-one onboarding drop-off from 40% to under 20%, owning the onboarding email sequence and product walkthrough end-to-end.",
+        "requires_confirmation": true
+      }
+    ],
+    "open_ambiguities": [
+      {
+        "ambiguity_id": "ambiguity_001",
+        "description": "\u201cDo a bit of everything\u201d does not identify which growth responsibilities fall within the role\u2019s scope or which are priorities.",
+        "source_statement": "I need a superstar who can do a bit of everything.",
+        "why_confirmation_is_needed": "The manager needs to specify the core responsibilities and expected breadth of ownership."
+      },
+      {
+        "ambiguity_id": "ambiguity_002",
+        "description": "The role's actual scope and priority responsibilities are not defined: it is unclear which sales, marketing, operational, or other duties are expected, and whether these are ongoing accountabilities or occasional urgent support.",
+        "source_statement": "Honestly, just whoever can jump in and handle whatever the business throws at them - sales, marketing, ops, whatever's on fire that week.",
+        "why_confirmation_is_needed": "Specific responsibilities and their relative priority are needed to define the role and evaluate relevant experience."
+      },
+      {
+        "ambiguity_id": "ambiguity_003",
+        "description": "The degree of decision-making authority, available resources, and escalation expectations for independently setting priorities is not specified.",
+        "source_statement": "I trust them to figure out the priorities themselves.",
+        "why_confirmation_is_needed": "These details determine what independent prioritization means in practice."
+      }
+    ],
+    "zuru_dna_behaviours": [],
+    "constraints": {
+      "country": null,
+      "location": null,
+      "work_arrangement": null,
+      "work_rights": null,
+      "weekly_hours": null,
+      "travel": null,
+      "languages": [],
+      "jurisdiction_notes": []
+    },
+    "assessment_methods": [],
+    "decision_owner": null,
+    "quality": {
+      "readiness_score": null,
+      "contradictions": [],
+      "warnings": [],
+      "warning_acknowledgements": []
+    },
+    "audit": {
+      "schema_version": "1.0",
+      "created_at": "2026-07-23T22:41:55.624112Z",
+      "updated_at": "2026-07-23T22:47:46.830690Z",
+      "model": null,
+      "prompt_version": null,
+      "source_ids": []
+    },
+    "human_approved": false,
+    "approved_by": null,
+    "approved_at": null,
+    "approved_sections": []
+  },
+  "final_quality_report": {
+    "readiness_score": 20,
+    "readiness_interpretation": "not ready",
+    "vague_phrases": [
+      {
+        "phrase": "superstar",
+        "category": "inflated_label",
+        "source": "initial manager statement"
+      }
+    ],
+    "excessive_requirement_issues": [
+      {
+        "issue_id": "excessive_day_one_must_haves",
+        "rule": "too_many_day_one_must_haves",
+        "message": "6 day-one must-haves are listed; the manager must explicitly identify the top five.",
+        "requirement_ids": [
+          "requirement_003",
+          "requirement_004",
+          "requirement_005",
+          "requirement_006",
+          "requirement_007",
+          "requirement_008"
+        ]
+      }
+    ],
+    "blockers": [
+      "Business need is missing.",
+      "At least one success outcome is required.",
+      "At least one responsibility is required.",
+      "At least one assessment method is required.",
+      "A human decision owner is required."
+    ]
+  }
+}

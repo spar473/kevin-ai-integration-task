@@ -415,7 +415,8 @@ _CAPABILITY_CLUSTERS: dict[str, tuple[str, ...]] = {
         r"\bsales\b",
         r"\bcrm\b",
         r"\baccount management\b",
-        r"\bpipeline\b",
+        r"\bsales pipeline\b",
+        r"\bdeal pipeline\b",
     ),
 }
 

@@ -1,0 +1,446 @@
+{
+  "persona_key": "over_technical_manager",
+  "persona_label": "Persona B: Over-technical manager",
+  "brief_source": "docs/ZURU_AI_Integration_Internship_Codex_Context.md \u00a73.5 Persona B",
+  "documented_expected_behaviour": [
+    "Cluster the skills.",
+    "Test whether each is genuinely necessary.",
+    "Separate day-one requirements from learnable skills.",
+    "Calibrate requirements against seniority.",
+    "Flag possible role overloading or role splitting."
+  ],
+  "initial_manager_statement": "For this entry-level intern I need someone who is already fully proficient on day one in: Python, SQL, R, Java, C++, Docker, Kubernetes, AWS, Azure, GCP, Terraform, CI/CD pipelines, REST API design, GraphQL, microservices architecture, PostgreSQL, MongoDB, Redis, Apache Kafka, Airflow, Spark, Hadoop, machine learning model training, deep learning with PyTorch and TensorFlow, retrieval-augmented generation, LangChain, vector databases, prompt engineering, fine-tuning LLMs, MLOps, data engineering pipelines, Tableau, Power BI, Excel macros, statistics, A/B testing, product management, stakeholder presentations, technical writing, Figma for internal tool mockups, Photoshop for the odd deck graphic, project management in Jira, Scrum mastery, budget forecasting, and public speaking. They need every one of these on day one, no exceptions.",
+  "turns": [
+    {
+      "turn_index": 1,
+      "stage_before": "basic_info",
+      "manager_message": "For this entry-level intern I need someone who is already fully proficient on day one in: Python, SQL, R, Java, C++, Docker, Kubernetes, AWS, Azure, GCP, Terraform, CI/CD pipelines, REST API design, GraphQL, microservices architecture, PostgreSQL, MongoDB, Redis, Apache Kafka, Airflow, Spark, Hadoop, machine learning model training, deep learning with PyTorch and TensorFlow, retrieval-augmented generation, LangChain, vector databases, prompt engineering, fine-tuning LLMs, MLOps, data engineering pipelines, Tableau, Power BI, Excel macros, statistics, A/B testing, product management, stakeholder presentations, technical writing, Figma for internal tool mockups, Photoshop for the odd deck graphic, project management in Jira, Scrum mastery, budget forecasting, and public speaking. They need every one of these on day one, no exceptions.",
+      "stage_after": "basic_info",
+      "next_question": {
+        "question_id": "question_001",
+        "question": "For this entry-level internship, which skills are truly mandatory on day one, and what observable proficiency standard should apply to each?",
+        "target_stage": "basic_info",
+        "purpose": null
+      },
+      "new_requirement_count": 5
+    },
+    {
+      "turn_index": 2,
+      "stage_before": "basic_info",
+      "manager_message": "Honestly they're all mandatory, this is a technical role. But if you're forcing me to pick, Python, SQL, and basic REST API debugging are what they'll touch in week one. The machine-learning, generative-AI, and cloud infrastructure stack can ramp up over the first couple of months with mentoring. The Scrum, budget forecasting, and presentation skills are just nice to have, not required.",
+      "stage_after": "basic_info",
+      "next_question": {
+        "question_id": "question_001",
+        "question": "What specific day-one tasks should the intern be able to complete independently in Python, SQL, and basic REST API debugging?",
+        "target_stage": "basic_info",
+        "purpose": null
+      },
+      "new_requirement_count": 7
+    },
+    {
+      "turn_index": 3,
+      "stage_before": "basic_info",
+      "manager_message": "Python is a non-negotiable, expert-level, day-one must-have: they need to independently debug and ship production data pipelines without supervision.",
+      "stage_after": "business_need",
+      "next_question": {
+        "question_id": "question_001",
+        "question": "What specific production data-pipeline environment, tools, and deployment responsibilities must the intern handle independently on day one?",
+        "target_stage": "business_need",
+        "purpose": null
+      },
+      "new_requirement_count": 1
+    },
+    {
+      "turn_index": 4,
+      "stage_before": "business_need",
+      "manager_message": "They'll be working against our existing internal data warehouse and API gateway, so no special new tooling beyond what's already listed.",
+      "stage_after": "business_need",
+      "next_question": {
+        "question_id": "question_001",
+        "question": "Which specific machine-learning, generative-AI, and cloud-infrastructure technologies are included in the expected stack?",
+        "target_stage": "business_need",
+        "purpose": null
+      },
+      "new_requirement_count": 0
+    }
+  ],
+  "rejected_turns": [
+    {
+      "note": "The literal PDF-style day-one skill list is rejected on the very first live turn about half the time: the model clusters the 47 skills correctly but also raises a single ambiguity about the undefined 'fully proficient' standard, quoting the same full input sentence as source_statement for both the clustered must-haves and the ambiguity. See docs/DECISIONS_AND_LESSONS.md entry 2026-07-24.",
+      "manager_message": "For this entry-level intern I need someone who is already fully proficient on day one in: Python, SQL, R, Java, C++, Docker, Kubernetes, AWS, Azure, GCP, Terraform, CI/CD pipelines, REST API design, GraphQL, microservices architecture, PostgreSQL, MongoDB, Redis, Apache Kafka, Airflow, Spark, Hadoop, machine learning model training, deep learning with PyTorch and TensorFlow, retrieval-augmented generation, LangChain, vector databases, prompt engineering, fine-tuning LLMs, MLOps, data engineering pipelines, Tableau, Power BI, Excel macros, statistics, A/B testing, product management, stakeholder presentations, technical writing, Figma for internal tool mockups, Photoshop for the odd deck graphic, project management in Jira, Scrum mastery, budget forecasting, and public speaking. They need every one of these on day one, no exceptions.",
+      "rejection_reason": "DiscoverySemanticValidationError: semantic_validation_failed",
+      "validation_field_locations": [
+        "incremental_requirements.0.priority",
+        "incremental_requirements.1.priority",
+        "incremental_requirements.2.priority"
+      ],
+      "validation_error_types": [
+        "must_have_conflicts_with_unresolved_ambiguity",
+        "must_have_conflicts_with_unresolved_ambiguity",
+        "must_have_conflicts_with_unresolved_ambiguity"
+      ]
+    },
+    {
+      "note": "A follow-up single-sentence must-have claim ('Python and the ML/GenAI stack are must-haves') was also rejected: the model correctly self-downgraded the two unnamed clusters to preferred, but kept Python must_have while also raising an evidence-standard ambiguity on the same sentence.",
+      "manager_message": "Python and the machine-learning and generative-AI stack are non-negotiable, expert-level, day-one must-haves.",
+      "rejection_reason": "DiscoverySemanticValidationError: semantic_validation_failed",
+      "validation_field_locations": ["incremental_requirements.0.priority"],
+      "validation_error_types": ["must_have_conflicts_with_unresolved_ambiguity"]
+    }
+  ],
+  "final_role_specification": {
+    "role_id": "role_live_over_technical_manager",
+    "version": 5,
+    "parent_version": 4,
+    "review_status": "draft",
+    "basic_info": {
+      "title": "AI Integration Intern",
+      "role_family": "technical",
+      "role_level": "intern",
+      "employment_type": "internship",
+      "division": null,
+      "team": null,
+      "location": null,
+      "work_arrangement": null,
+      "reporting_to": null,
+      "start_date": null,
+      "end_date": null,
+      "initial_manager_statement": "For this entry-level intern I need someone who is already fully proficient on day one in: Python, SQL, R, Java, C++, Docker, Kubernetes, AWS, Azure, GCP, Terraform, CI/CD pipelines, REST API design, GraphQL, microservices architecture, PostgreSQL, MongoDB, Redis, Apache Kafka, Airflow, Spark, Hadoop, machine learning model training, deep learning with PyTorch and TensorFlow, retrieval-augmented generation, LangChain, vector databases, prompt engineering, fine-tuning LLMs, MLOps, data engineering pipelines, Tableau, Power BI, Excel macros, statistics, A/B testing, product management, stakeholder presentations, technical writing, Figma for internal tool mockups, Photoshop for the odd deck graphic, project management in Jira, Scrum mastery, budget forecasting, and public speaking. They need every one of these on day one, no exceptions."
+    },
+    "business_need": {
+      "problem": null,
+      "why_now": null,
+      "cost_of_vacancy": null,
+      "is_replacement": null
+    },
+    "success_outcomes": [],
+    "responsibilities": [],
+    "requirements": [
+      {
+        "requirement_id": "requirement_001",
+        "category": "technical",
+        "name": "Day-one proficiency in software, cloud, infrastructure, API, data-platform, and database technologies",
+        "description": "Day-one proficiency is requested in Python, SQL, R, Java, C++, Docker, Kubernetes, AWS, Azure, GCP, Terraform, CI/CD pipelines, REST API design, GraphQL, microservices architecture, PostgreSQL, MongoDB, Redis, Apache Kafka, Airflow, Spark, and Hadoop.",
+        "priority": "preferred",
+        "proficiency": null,
+        "learnability": null,
+        "accepted_equivalents": [],
+        "business_rationale": "The manager explicitly lists these technologies under a request for someone \"already fully proficient on day one.\" The observable proficiency threshold still requires clarification.",
+        "evidence_methods": [],
+        "source_statement": "For this entry-level intern I need someone who is already fully proficient on day one in: Python, SQL, R, Java, C++, Docker, Kubernetes, AWS, Azure, GCP, Terraform, CI/CD pipelines, REST API design, GraphQL, microservices architecture, PostgreSQL, MongoDB, Redis, Apache Kafka, Airflow, Spark, Hadoop",
+        "source_turn_id": "initial_manager_statement",
+        "confidence": null,
+        "requires_confirmation": true,
+        "approved_by_human": false
+      },
+      {
+        "requirement_id": "requirement_002",
+        "category": "technical",
+        "name": "Day-one proficiency in machine learning, generative AI, and MLOps",
+        "description": "Day-one proficiency is requested in machine learning model training, deep learning with PyTorch and TensorFlow, retrieval-augmented generation, LangChain, vector databases, prompt engineering, fine-tuning LLMs, MLOps, and data engineering pipelines.",
+        "priority": "preferred",
+        "proficiency": null,
+        "learnability": null,
+        "accepted_equivalents": [],
+        "business_rationale": "The manager explicitly includes these machine-learning and AI areas in the stated day-one proficiency list. The level of proficiency expected for each area is not operationally defined.",
+        "evidence_methods": [],
+        "source_statement": "machine learning model training, deep learning with PyTorch and TensorFlow, retrieval-augmented generation, LangChain, vector databases, prompt engineering, fine-tuning LLMs, MLOps, data engineering pipelines",
+        "source_turn_id": "initial_manager_statement",
+        "confidence": null,
+        "requires_confirmation": true,
+        "approved_by_human": false
+      },
+      {
+        "requirement_id": "requirement_003",
+        "category": "technical",
+        "name": "Day-one proficiency in analytics, experimentation, visualisation, and design tools",
+        "description": "Day-one proficiency is requested in Tableau, Power BI, Excel macros, statistics, A/B testing, Figma for internal tool mockups, and Photoshop for the odd deck graphic.",
+        "priority": "preferred",
+        "proficiency": null,
+        "learnability": null,
+        "accepted_equivalents": [],
+        "business_rationale": "These tools and capabilities are explicitly included in the manager's requested skills list, with a stated expectation of proficiency on day one. Expected depth and use cases require clarification.",
+        "evidence_methods": [],
+        "source_statement": "Tableau, Power BI, Excel macros, statistics, A/B testing, Figma for internal tool mockups, Photoshop for the odd deck graphic",
+        "source_turn_id": "initial_manager_statement",
+        "confidence": null,
+        "requires_confirmation": true,
+        "approved_by_human": false
+      },
+      {
+        "requirement_id": "requirement_004",
+        "category": "domain",
+        "name": "Day-one capability in product, project, and budget work",
+        "description": "Day-one capability is requested in product management, project management in Jira, Scrum mastery, and budget forecasting.",
+        "priority": "preferred",
+        "proficiency": null,
+        "learnability": null,
+        "accepted_equivalents": [],
+        "business_rationale": "The manager explicitly lists these product, delivery, and budget-related capabilities among the requested day-one skills. The expected responsibilities and proficiency standard are not defined.",
+        "evidence_methods": [],
+        "source_statement": "product management, project management in Jira, Scrum mastery, budget forecasting",
+        "source_turn_id": "initial_manager_statement",
+        "confidence": null,
+        "requires_confirmation": true,
+        "approved_by_human": false
+      },
+      {
+        "requirement_id": "requirement_005",
+        "category": "behavioural",
+        "name": "Day-one capability in stakeholder communication",
+        "description": "Day-one capability is requested in stakeholder presentations, technical writing, and public speaking.",
+        "priority": "preferred",
+        "proficiency": null,
+        "learnability": null,
+        "accepted_equivalents": [],
+        "business_rationale": "The manager explicitly lists these communication activities among the requested skills and states that every listed item is needed on day one. Observable expectations for these activities require clarification.",
+        "evidence_methods": [],
+        "source_statement": "stakeholder presentations, technical writing, public speaking",
+        "source_turn_id": "initial_manager_statement",
+        "confidence": null,
+        "requires_confirmation": true,
+        "approved_by_human": false
+      },
+      {
+        "requirement_id": "requirement_006",
+        "category": "technical",
+        "name": "Python use in week one",
+        "description": "Python is identified as a technology the intern will touch in week one.",
+        "priority": "preferred",
+        "proficiency": null,
+        "learnability": null,
+        "accepted_equivalents": [],
+        "business_rationale": "The manager specifically identifies Python as part of the work expected in the first week, but does not define the required proficiency standard.",
+        "evidence_methods": [],
+        "source_statement": "But if you're forcing me to pick, Python, SQL, and basic REST API debugging are what they'll touch in week one.",
+        "source_turn_id": "initial_manager_statement",
+        "confidence": null,
+        "requires_confirmation": true,
+        "approved_by_human": false
+      },
+      {
+        "requirement_id": "requirement_007",
+        "category": "technical",
+        "name": "SQL use in week one",
+        "description": "SQL is identified as a technology the intern will touch in week one.",
+        "priority": "preferred",
+        "proficiency": null,
+        "learnability": null,
+        "accepted_equivalents": [],
+        "business_rationale": "The manager specifically identifies SQL as part of the work expected in the first week, but does not define the required proficiency standard.",
+        "evidence_methods": [],
+        "source_statement": "But if you're forcing me to pick, Python, SQL, and basic REST API debugging are what they'll touch in week one.",
+        "source_turn_id": "initial_manager_statement",
+        "confidence": null,
+        "requires_confirmation": true,
+        "approved_by_human": false
+      },
+      {
+        "requirement_id": "requirement_008",
+        "category": "technical",
+        "name": "Basic REST API debugging in week one",
+        "description": "Basic REST API debugging is identified as work the intern will touch in week one.",
+        "priority": "preferred",
+        "proficiency": null,
+        "learnability": null,
+        "accepted_equivalents": [],
+        "business_rationale": "The manager expressly identifies basic REST API debugging for first-week work; the precise observable capability expected is not stated.",
+        "evidence_methods": [],
+        "source_statement": "But if you're forcing me to pick, Python, SQL, and basic REST API debugging are what they'll touch in week one.",
+        "source_turn_id": "initial_manager_statement",
+        "confidence": null,
+        "requires_confirmation": true,
+        "approved_by_human": false
+      },
+      {
+        "requirement_id": "requirement_009",
+        "category": "technical",
+        "name": "Ramp-up in machine learning, generative AI, and cloud infrastructure",
+        "description": "The intern can develop capability in the machine-learning, generative-AI, and cloud-infrastructure stack over the first couple of months with mentoring.",
+        "priority": "preferred",
+        "proficiency": null,
+        "learnability": null,
+        "accepted_equivalents": [],
+        "business_rationale": "The manager states that these areas can be ramped up with mentoring rather than requiring day-one proficiency.",
+        "evidence_methods": [],
+        "source_statement": "The machine-learning, generative-AI, and cloud infrastructure stack can ramp up over the first couple of months with mentoring.",
+        "source_turn_id": "initial_manager_statement",
+        "confidence": null,
+        "requires_confirmation": true,
+        "approved_by_human": false
+      },
+      {
+        "requirement_id": "requirement_010",
+        "category": "behavioural",
+        "name": "Scrum familiarity",
+        "description": "Scrum skills are nice to have rather than required.",
+        "priority": "optional",
+        "proficiency": null,
+        "learnability": null,
+        "accepted_equivalents": [],
+        "business_rationale": "The manager explicitly describes Scrum skills as not required.",
+        "evidence_methods": [],
+        "source_statement": "The Scrum, budget forecasting, and presentation skills are just nice to have, not required.",
+        "source_turn_id": "initial_manager_statement",
+        "confidence": null,
+        "requires_confirmation": true,
+        "approved_by_human": false
+      },
+      {
+        "requirement_id": "requirement_011",
+        "category": "domain",
+        "name": "Budget forecasting familiarity",
+        "description": "Budget forecasting skills are nice to have rather than required.",
+        "priority": "optional",
+        "proficiency": null,
+        "learnability": null,
+        "accepted_equivalents": [],
+        "business_rationale": "The manager explicitly describes budget forecasting skills as not required.",
+        "evidence_methods": [],
+        "source_statement": "The Scrum, budget forecasting, and presentation skills are just nice to have, not required.",
+        "source_turn_id": "initial_manager_statement",
+        "confidence": null,
+        "requires_confirmation": true,
+        "approved_by_human": false
+      },
+      {
+        "requirement_id": "requirement_012",
+        "category": "behavioural",
+        "name": "Presentation skills",
+        "description": "Presentation skills are nice to have rather than required.",
+        "priority": "optional",
+        "proficiency": null,
+        "learnability": null,
+        "accepted_equivalents": [],
+        "business_rationale": "The manager explicitly describes presentation skills as not required.",
+        "evidence_methods": [],
+        "source_statement": "The Scrum, budget forecasting, and presentation skills are just nice to have, not required.",
+        "source_turn_id": "initial_manager_statement",
+        "confidence": null,
+        "requires_confirmation": true,
+        "approved_by_human": false
+      },
+      {
+        "requirement_id": "requirement_013",
+        "category": "technical",
+        "name": "Expert-level Python for independent production data-pipeline debugging and delivery on day one",
+        "description": "Candidate must have expert-level Python on day one and be able to independently debug and ship production data pipelines without supervision.",
+        "priority": "must_have",
+        "proficiency": null,
+        "learnability": null,
+        "accepted_equivalents": [],
+        "business_rationale": "The manager explicitly describes Python as non-negotiable, expert-level, and a day-one must-have, with independent debugging and shipping of production data pipelines required.",
+        "evidence_methods": [],
+        "source_statement": "Python is a non-negotiable, expert-level, day-one must-have: they need to independently debug and ship production data pipelines without supervision.",
+        "source_turn_id": "initial_manager_statement",
+        "confidence": null,
+        "requires_confirmation": true,
+        "approved_by_human": false
+      }
+    ],
+    "open_assumptions": [],
+    "open_ambiguities": [
+      {
+        "ambiguity_id": "ambiguity_001",
+        "description": "The manager must define what evidence or observable standard constitutes being \"fully proficient\" for each requested skill on day one.",
+        "source_statement": "already fully proficient on day one",
+        "why_confirmation_is_needed": "No proficiency level, practical scope, or assessment standard is stated."
+      },
+      {
+        "ambiguity_id": "ambiguity_002",
+        "description": "The manager must clarify the expected level of responsibility for Scrum, product management, budget forecasting, stakeholder presentations, and public speaking within an internship.",
+        "source_statement": "product management, stakeholder presentations, project management in Jira, Scrum mastery, budget forecasting, and public speaking",
+        "why_confirmation_is_needed": "The activities are named, but the manager does not state whether the intern is expected to assist, independently perform, or lead them."
+      },
+      {
+        "ambiguity_id": "ambiguity_003",
+        "description": "It is unclear whether \u201cthey're all mandatory\u201d applies to every previously discussed skill, only to technical skills, or only to the first-week Python, SQL, and REST API work.",
+        "source_statement": "Honestly they're all mandatory, this is a technical role.",
+        "why_confirmation_is_needed": "The statement's scope is not defined and is qualified by later statements that some skills can be ramped up and others are not required."
+      },
+      {
+        "ambiguity_id": "ambiguity_004",
+        "description": "The observable day-one proficiency expected for Python, SQL, and basic REST API debugging is not defined.",
+        "source_statement": "But if you're forcing me to pick, Python, SQL, and basic REST API debugging are what they'll touch in week one.",
+        "why_confirmation_is_needed": "Saying the intern will touch these areas in week one does not establish what tasks they must independently perform or what evidence demonstrates readiness."
+      },
+      {
+        "ambiguity_id": "ambiguity_005",
+        "description": "The specific machine-learning, generative-AI, and cloud-infrastructure technologies included in the stack are not identified.",
+        "source_statement": "The machine-learning, generative-AI, and cloud infrastructure stack can ramp up over the first couple of months with mentoring.",
+        "why_confirmation_is_needed": "The manager must identify the technologies or capabilities to be learned in order to define the ramp-up expectation."
+      }
+    ],
+    "zuru_dna_behaviours": [],
+    "constraints": {
+      "country": null,
+      "location": null,
+      "work_arrangement": null,
+      "work_rights": null,
+      "weekly_hours": null,
+      "travel": null,
+      "languages": [],
+      "jurisdiction_notes": []
+    },
+    "assessment_methods": [],
+    "decision_owner": null,
+    "quality": {
+      "readiness_score": null,
+      "contradictions": [
+        {
+          "contradiction_id": "contradiction_001",
+          "description": "The stated entry-level intern context may conflict with requiring fully proficient day-one capability across every listed technology, AI area, analytics tool, business capability, and communication activity without exceptions.",
+          "severity": "low",
+          "source_statements": [
+            "Known basic info: Title: AI Integration Intern; Role family: technical; Role level: intern; Employment type: internship",
+            "For this entry-level intern I need someone who is already fully proficient on day one in: Python, SQL, R, Java, C++, Docker, Kubernetes, AWS, Azure, GCP, Terraform, CI/CD pipelines, REST API design, GraphQL, microservices architecture, PostgreSQL, MongoDB, Redis, Apache Kafka, Airflow, Spark, Hadoop, machine learning model training, deep learning with PyTorch and TensorFlow, retrieval-augmented generation, LangChain, vector databases, prompt engineering, fine-tuning LLMs, MLOps, data engineering pipelines, Tableau, Power BI, Excel macros, statistics, A/B testing, product management, stakeholder presentations, technical writing, Figma for internal tool mockups, Photoshop for the odd deck graphic, project management in Jira, Scrum mastery, budget forecasting, and public speaking. They need every one of these on day one, no exceptions."
+          ],
+          "resolution": null,
+          "resolved": false,
+          "resolved_by": null,
+          "resolved_at": null
+        },
+        {
+          "contradiction_id": "contradiction_002",
+          "description": "The broad statement that all items are mandatory may conflict with the later statement that Scrum, budget forecasting, and presentation skills are nice to have and not required.",
+          "severity": "low",
+          "source_statements": [
+            "Honestly they're all mandatory, this is a technical role.",
+            "The Scrum, budget forecasting, and presentation skills are just nice to have, not required."
+          ],
+          "resolution": null,
+          "resolved": false,
+          "resolved_by": null,
+          "resolved_at": null
+        }
+      ],
+      "warnings": [],
+      "warning_acknowledgements": []
+    },
+    "audit": {
+      "schema_version": "1.0",
+      "created_at": "2026-07-23T22:49:45.831014Z",
+      "updated_at": "2026-07-23T22:53:03.239750Z",
+      "model": null,
+      "prompt_version": null,
+      "source_ids": []
+    },
+    "human_approved": false,
+    "approved_by": null,
+    "approved_at": null,
+    "approved_sections": []
+  },
+  "final_quality_report": {
+    "readiness_score": 15,
+    "readiness_interpretation": "not ready",
+    "vague_phrases": [],
+    "excessive_requirement_issues": [],
+    "blockers": [
+      "Business need is missing.",
+      "At least one success outcome is required.",
+      "At least one responsibility is required.",
+      "At least one assessment method is required.",
+      "A human decision owner is required."
+    ]
+  }
+}

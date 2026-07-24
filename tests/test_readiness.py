@@ -403,6 +403,28 @@ def test_unrelated_specialist_capability_clusters_are_flagged() -> None:
     assert "unrelated_capability_clusters" in rules
 
 
+def test_data_pipeline_wording_does_not_false_positive_into_sales_cluster() -> None:
+    """A bare `pipeline` pattern previously matched "data pipeline" and
+    "CI/CD pipeline" wording as the sales cluster, flagging an unrelated
+    software/sales role split on a role with no sales content at all.
+    Recorded live 2026-07-24: see docs/DECISIONS_AND_LESSONS.md."""
+    role = complete_role().model_copy(
+        update={
+            "requirements": [
+                requirement(
+                    "requirement_001",
+                    "Expert-level Python for production data-pipeline delivery",
+                    category=RequirementCategory.TECHNICAL,
+                )
+            ]
+        }
+    )
+
+    rules = {item.rule for item in detect_excessive_requirements(role)}
+
+    assert "unrelated_capability_clusters" not in rules
+
+
 def test_advanced_day_one_capability_for_intern_is_seniority_mismatch() -> None:
     role = complete_role().model_copy(
         update={

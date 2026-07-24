@@ -17,15 +17,20 @@ from typing import TypeVar
 
 from src.llm_client import LLMClient, LLMMessage
 from src.models import (
+    BusinessNeed,
     DiscoveryAssumption,
     DiscoveryExtractionResponse,
     DiscoveryTurnResult,
     Requirement,
     RequirementPriority,
+    Responsibility,
     ReviewStatus,
+    RoleConstraints,
     RoleSpecification,
+    SuccessOutcome,
     UnresolvedAmbiguity,
     WorkflowStage,
+    ZuruDnaBehaviour,
 )
 from src.workflow import WorkflowState, resolve_next_stage
 
@@ -40,6 +45,27 @@ class RequirementNotFoundError(ValueError):
 
     def __init__(self, requirement_id: str) -> None:
         super().__init__(f"Requirement was not found: {requirement_id}")
+
+
+class SuccessOutcomeNotFoundError(ValueError):
+    """Raised when a manager edit targets an unknown success outcome."""
+
+    def __init__(self, outcome_id: str) -> None:
+        super().__init__(f"Success outcome was not found: {outcome_id}")
+
+
+class ResponsibilityNotFoundError(ValueError):
+    """Raised when a manager edit targets an unknown responsibility."""
+
+    def __init__(self, responsibility_id: str) -> None:
+        super().__init__(f"Responsibility was not found: {responsibility_id}")
+
+
+class ZuruDnaBehaviourNotFoundError(ValueError):
+    """Raised when a manager edit targets an out-of-range ZURU DNA behaviour."""
+
+    def __init__(self, index: int) -> None:
+        super().__init__(f"ZURU DNA behaviour was not found at index: {index}")
 
 
 @lru_cache(maxsize=1)
@@ -271,13 +297,18 @@ def _requirement_index(role: RoleSpecification, requirement_id: str) -> int:
     raise RequirementNotFoundError(requirement_id)
 
 
-def _manager_revised_role(
+def _revise_role(
     role: RoleSpecification,
-    requirements: list[Requirement],
+    updates: dict[str, object],
     *,
     edited_at: datetime | None = None,
 ) -> RoleSpecification:
-    """Create a new role version and invalidate approval after a manager edit."""
+    """Create a new role version and invalidate approval after a manager edit.
+
+    Shared by every manual edit function in this module: bump the version,
+    drop stale approval, and stamp the audit timestamp, alongside whichever
+    fields the caller is changing.
+    """
     timestamp = edited_at or datetime.now(UTC)
     review_status = (
         ReviewStatus.NEEDS_REVIEW
@@ -286,7 +317,7 @@ def _manager_revised_role(
     )
     return role.model_copy(
         update={
-            "requirements": requirements,
+            **updates,
             "parent_version": role.version,
             "version": role.version + 1,
             "review_status": review_status,
@@ -297,6 +328,16 @@ def _manager_revised_role(
             "audit": role.audit.model_copy(update={"updated_at": timestamp}),
         }
     )
+
+
+def _manager_revised_role(
+    role: RoleSpecification,
+    requirements: list[Requirement],
+    *,
+    edited_at: datetime | None = None,
+) -> RoleSpecification:
+    """Create a new role version with revised requirements."""
+    return _revise_role(role, {"requirements": requirements}, edited_at=edited_at)
 
 
 def edit_requirement(
@@ -367,4 +408,341 @@ def change_requirement_priority(
         priority=priority,
         business_rationale=current.business_rationale,
         edited_at=edited_at,
+    )
+
+
+# ---------------------------------------------------------------------------
+# Manual edits for role sections discovery cannot extract on its own.
+#
+# ``apply_discovery_turn`` only ever writes ``requirements``,
+# ``open_assumptions``, ``open_ambiguities``, and ``quality.contradictions``
+# (see docs/DECISIONS_AND_LESSONS.md, 2026-07-24). Business need, outcomes,
+# responsibilities, constraints, the assessment plan, and ZURU DNA
+# behaviours are business decisions a human states directly -- these
+# functions are the confirm/edit path for that, not a new discovery-turn
+# extraction target.
+# ---------------------------------------------------------------------------
+
+
+def edit_business_need(
+    role: RoleSpecification,
+    *,
+    problem: str | None,
+    why_now: str | None,
+    cost_of_vacancy: str | None,
+    is_replacement: bool | None,
+    edited_at: datetime | None = None,
+) -> RoleSpecification:
+    """Replace the manager-confirmed business need."""
+    business_need = BusinessNeed(
+        problem=problem.strip() if problem and problem.strip() else None,
+        why_now=why_now.strip() if why_now and why_now.strip() else None,
+        cost_of_vacancy=(
+            cost_of_vacancy.strip()
+            if cost_of_vacancy and cost_of_vacancy.strip()
+            else None
+        ),
+        is_replacement=is_replacement,
+    )
+    return _revise_role(role, {"business_need": business_need}, edited_at=edited_at)
+
+
+def _outcome_index(role: RoleSpecification, outcome_id: str) -> int:
+    for index, item in enumerate(role.success_outcomes):
+        if item.outcome_id == outcome_id:
+            return index
+    raise SuccessOutcomeNotFoundError(outcome_id)
+
+
+def add_success_outcome(
+    role: RoleSpecification,
+    *,
+    description: str,
+    time_horizon: str | None,
+    measure: str | None,
+    priority: RequirementPriority,
+    source_statement: str | None = None,
+    edited_at: datetime | None = None,
+) -> RoleSpecification:
+    """Add one manager-confirmed success outcome."""
+    outcome = SuccessOutcome(
+        outcome_id=f"outcome_{len(role.success_outcomes) + 1:03d}",
+        description=description.strip(),
+        time_horizon=time_horizon.strip() if time_horizon and time_horizon.strip() else None,
+        measure=measure.strip() if measure and measure.strip() else None,
+        priority=priority,
+        source_statement=(
+            source_statement.strip() if source_statement and source_statement.strip() else None
+        ),
+    )
+    return _revise_role(
+        role,
+        {"success_outcomes": [*role.success_outcomes, outcome]},
+        edited_at=edited_at,
+    )
+
+
+def edit_success_outcome(
+    role: RoleSpecification,
+    outcome_id: str,
+    *,
+    description: str,
+    time_horizon: str | None,
+    measure: str | None,
+    priority: RequirementPriority,
+    edited_at: datetime | None = None,
+) -> RoleSpecification:
+    """Edit one existing success outcome in place, preserving its id."""
+    index = _outcome_index(role, outcome_id)
+    current = role.success_outcomes[index]
+    updated = current.model_copy(
+        update={
+            "description": description.strip(),
+            "time_horizon": (
+                time_horizon.strip() if time_horizon and time_horizon.strip() else None
+            ),
+            "measure": measure.strip() if measure and measure.strip() else None,
+            "priority": priority,
+        }
+    )
+    outcomes = list(role.success_outcomes)
+    outcomes[index] = updated
+    return _revise_role(role, {"success_outcomes": outcomes}, edited_at=edited_at)
+
+
+def delete_success_outcome(
+    role: RoleSpecification,
+    outcome_id: str,
+    *,
+    edited_at: datetime | None = None,
+) -> RoleSpecification:
+    """Delete exactly one success outcome."""
+    index = _outcome_index(role, outcome_id)
+    outcomes = list(role.success_outcomes)
+    outcomes.pop(index)
+    return _revise_role(role, {"success_outcomes": outcomes}, edited_at=edited_at)
+
+
+def _responsibility_index(role: RoleSpecification, responsibility_id: str) -> int:
+    for index, item in enumerate(role.responsibilities):
+        if item.responsibility_id == responsibility_id:
+            return index
+    raise ResponsibilityNotFoundError(responsibility_id)
+
+
+def add_responsibility(
+    role: RoleSpecification,
+    *,
+    description: str,
+    frequency: str | None,
+    ownership_level: str | None,
+    priority: RequirementPriority | None,
+    source_statement: str | None = None,
+    edited_at: datetime | None = None,
+) -> RoleSpecification:
+    """Add one manager-confirmed responsibility."""
+    responsibility = Responsibility(
+        responsibility_id=f"responsibility_{len(role.responsibilities) + 1:03d}",
+        description=description.strip(),
+        frequency=frequency.strip() if frequency and frequency.strip() else None,
+        ownership_level=(
+            ownership_level.strip() if ownership_level and ownership_level.strip() else None
+        ),
+        priority=priority,
+        source_statement=(
+            source_statement.strip() if source_statement and source_statement.strip() else None
+        ),
+    )
+    return _revise_role(
+        role,
+        {"responsibilities": [*role.responsibilities, responsibility]},
+        edited_at=edited_at,
+    )
+
+
+def edit_responsibility(
+    role: RoleSpecification,
+    responsibility_id: str,
+    *,
+    description: str,
+    frequency: str | None,
+    ownership_level: str | None,
+    priority: RequirementPriority | None,
+    edited_at: datetime | None = None,
+) -> RoleSpecification:
+    """Edit one existing responsibility in place, preserving its id."""
+    index = _responsibility_index(role, responsibility_id)
+    current = role.responsibilities[index]
+    updated = current.model_copy(
+        update={
+            "description": description.strip(),
+            "frequency": frequency.strip() if frequency and frequency.strip() else None,
+            "ownership_level": (
+                ownership_level.strip()
+                if ownership_level and ownership_level.strip()
+                else None
+            ),
+            "priority": priority,
+        }
+    )
+    responsibilities = list(role.responsibilities)
+    responsibilities[index] = updated
+    return _revise_role(
+        role, {"responsibilities": responsibilities}, edited_at=edited_at
+    )
+
+
+def delete_responsibility(
+    role: RoleSpecification,
+    responsibility_id: str,
+    *,
+    edited_at: datetime | None = None,
+) -> RoleSpecification:
+    """Delete exactly one responsibility."""
+    index = _responsibility_index(role, responsibility_id)
+    responsibilities = list(role.responsibilities)
+    responsibilities.pop(index)
+    return _revise_role(
+        role, {"responsibilities": responsibilities}, edited_at=edited_at
+    )
+
+
+def edit_constraints(
+    role: RoleSpecification,
+    *,
+    country: str | None,
+    location: str | None,
+    work_arrangement: str | None,
+    work_rights: str | None,
+    weekly_hours: str | None,
+    travel: str | None,
+    languages: list[str] | None = None,
+    jurisdiction_notes: list[str] | None = None,
+    edited_at: datetime | None = None,
+) -> RoleSpecification:
+    """Replace the manager-confirmed logistical and jurisdictional constraints."""
+
+    def _clean(value: str | None) -> str | None:
+        return value.strip() if value and value.strip() else None
+
+    constraints = RoleConstraints(
+        country=_clean(country),
+        location=_clean(location),
+        work_arrangement=_clean(work_arrangement),
+        work_rights=_clean(work_rights),
+        weekly_hours=_clean(weekly_hours),
+        travel=_clean(travel),
+        languages=[item.strip() for item in (languages or []) if item.strip()],
+        jurisdiction_notes=[
+            item.strip() for item in (jurisdiction_notes or []) if item.strip()
+        ],
+    )
+    return _revise_role(role, {"constraints": constraints}, edited_at=edited_at)
+
+
+def edit_assessment_plan(
+    role: RoleSpecification,
+    *,
+    assessment_methods: list[str],
+    decision_owner: str | None,
+    edited_at: datetime | None = None,
+) -> RoleSpecification:
+    """Replace the manager-confirmed assessment methods and decision owner."""
+    return _revise_role(
+        role,
+        {
+            "assessment_methods": [
+                item.strip() for item in assessment_methods if item.strip()
+            ],
+            "decision_owner": (
+                decision_owner.strip()
+                if decision_owner and decision_owner.strip()
+                else None
+            ),
+        },
+        edited_at=edited_at,
+    )
+
+
+def _zuru_dna_behaviour_index(role: RoleSpecification, index: int) -> int:
+    if index < 0 or index >= len(role.zuru_dna_behaviours):
+        raise ZuruDnaBehaviourNotFoundError(index)
+    return index
+
+
+def add_zuru_dna_behaviour(
+    role: RoleSpecification,
+    *,
+    value: str,
+    role_behaviour: str,
+    scenario: str | None,
+    evidence_method: str | None,
+    source_statement: str | None = None,
+    edited_at: datetime | None = None,
+) -> RoleSpecification:
+    """Add one manager-confirmed ZURU DNA behaviour."""
+    behaviour = ZuruDnaBehaviour(
+        value=value.strip(),
+        role_behaviour=role_behaviour.strip(),
+        scenario=scenario.strip() if scenario and scenario.strip() else None,
+        evidence_method=(
+            evidence_method.strip() if evidence_method and evidence_method.strip() else None
+        ),
+        source_statement=(
+            source_statement.strip() if source_statement and source_statement.strip() else None
+        ),
+        approved_by_human=True,
+    )
+    return _revise_role(
+        role,
+        {"zuru_dna_behaviours": [*role.zuru_dna_behaviours, behaviour]},
+        edited_at=edited_at,
+    )
+
+
+def edit_zuru_dna_behaviour(
+    role: RoleSpecification,
+    index: int,
+    *,
+    value: str,
+    role_behaviour: str,
+    scenario: str | None,
+    evidence_method: str | None,
+    edited_at: datetime | None = None,
+) -> RoleSpecification:
+    """Edit one existing ZURU DNA behaviour in place, by its list position."""
+    position = _zuru_dna_behaviour_index(role, index)
+    current = role.zuru_dna_behaviours[position]
+    updated = current.model_copy(
+        update={
+            "value": value.strip(),
+            "role_behaviour": role_behaviour.strip(),
+            "scenario": scenario.strip() if scenario and scenario.strip() else None,
+            "evidence_method": (
+                evidence_method.strip()
+                if evidence_method and evidence_method.strip()
+                else None
+            ),
+            "approved_by_human": True,
+        }
+    )
+    behaviours = list(role.zuru_dna_behaviours)
+    behaviours[position] = updated
+    return _revise_role(
+        role, {"zuru_dna_behaviours": behaviours}, edited_at=edited_at
+    )
+
+
+def delete_zuru_dna_behaviour(
+    role: RoleSpecification,
+    index: int,
+    *,
+    edited_at: datetime | None = None,
+) -> RoleSpecification:
+    """Delete exactly one ZURU DNA behaviour, by its list position."""
+    position = _zuru_dna_behaviour_index(role, index)
+    behaviours = list(role.zuru_dna_behaviours)
+    behaviours.pop(position)
+    return _revise_role(
+        role, {"zuru_dna_behaviours": behaviours}, edited_at=edited_at
     )

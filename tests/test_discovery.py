@@ -12,12 +12,27 @@ import pytest
 
 from src.discovery import (
     RequirementNotFoundError,
+    ResponsibilityNotFoundError,
+    SuccessOutcomeNotFoundError,
+    ZuruDnaBehaviourNotFoundError,
+    add_responsibility,
+    add_success_outcome,
+    add_zuru_dna_behaviour,
     apply_discovery_turn,
     build_discovery_messages,
     change_requirement_priority,
     delete_requirement,
+    delete_responsibility,
+    delete_success_outcome,
+    delete_zuru_dna_behaviour,
     discovery_system_prompt,
+    edit_assessment_plan,
+    edit_business_need,
+    edit_constraints,
     edit_requirement,
+    edit_responsibility,
+    edit_success_outcome,
+    edit_zuru_dna_behaviour,
     render_role_context,
     run_discovery_turn,
     take_discovery_turn,
@@ -467,3 +482,169 @@ def test_priority_change_preserves_other_requirement_fields() -> None:
     assert item.priority is RequirementPriority.OPTIONAL
     assert item.name == role.requirements[0].name
     assert item.source_statement == role.requirements[0].source_statement
+
+
+# ---------------------------------------------------------------------------
+# Manual edits for sections discovery cannot extract on its own
+# ---------------------------------------------------------------------------
+
+
+def test_edit_business_need_sets_fields_and_invalidates_stale_approval() -> None:
+    role = editable_role()
+
+    updated = edit_business_need(
+        role,
+        problem="The team needs summer campaign delivery capacity.",
+        why_now="  ",
+        cost_of_vacancy=None,
+        is_replacement=False,
+    )
+
+    assert updated.business_need.problem == (
+        "The team needs summer campaign delivery capacity."
+    )
+    assert updated.business_need.why_now is None
+    assert updated.business_need.is_replacement is False
+    assert updated.parent_version == 4
+    assert updated.version == 5
+    assert updated.human_approved is False
+    assert updated.review_status is ReviewStatus.NEEDS_REVIEW
+
+
+def test_add_edit_delete_success_outcome_round_trip() -> None:
+    role = editable_role()
+
+    added = add_success_outcome(
+        role,
+        description="Ship four TikTok campaign posts.",
+        time_horizon="First 30 days",
+        measure="Four published posts",
+        priority=RequirementPriority.MUST_HAVE,
+        source_statement="Deliver four posts in the first month.",
+    )
+    assert len(added.success_outcomes) == 1
+    outcome_id = added.success_outcomes[0].outcome_id
+    assert added.human_approved is False
+
+    edited = edit_success_outcome(
+        added,
+        outcome_id,
+        description="Ship six TikTok campaign posts.",
+        time_horizon="First 60 days",
+        measure="Six published posts",
+        priority=RequirementPriority.PREFERRED,
+    )
+    assert edited.success_outcomes[0].description == "Ship six TikTok campaign posts."
+    assert edited.success_outcomes[0].outcome_id == outcome_id
+    assert edited.success_outcomes[0].priority is RequirementPriority.PREFERRED
+
+    deleted = delete_success_outcome(edited, outcome_id)
+    assert deleted.success_outcomes == []
+
+    with pytest.raises(SuccessOutcomeNotFoundError):
+        edit_success_outcome(
+            deleted,
+            outcome_id,
+            description="x",
+            time_horizon=None,
+            measure=None,
+            priority=RequirementPriority.MUST_HAVE,
+        )
+
+
+def test_add_edit_delete_responsibility_round_trip() -> None:
+    role = editable_role()
+
+    added = add_responsibility(
+        role,
+        description="Draft weekly campaign content with the team.",
+        frequency="Weekly",
+        ownership_level="Shared",
+        priority=RequirementPriority.MUST_HAVE,
+    )
+    responsibility_id = added.responsibilities[0].responsibility_id
+
+    edited = edit_responsibility(
+        added,
+        responsibility_id,
+        description="Draft and schedule weekly campaign content.",
+        frequency="Weekly",
+        ownership_level="Independent",
+        priority=None,
+    )
+    assert edited.responsibilities[0].ownership_level == "Independent"
+    assert edited.responsibilities[0].priority is None
+
+    deleted = delete_responsibility(edited, responsibility_id)
+    assert deleted.responsibilities == []
+
+    with pytest.raises(ResponsibilityNotFoundError):
+        delete_responsibility(deleted, responsibility_id)
+
+
+def test_edit_constraints_replaces_fields_and_filters_blank_list_entries() -> None:
+    role = editable_role()
+
+    updated = edit_constraints(
+        role,
+        country="New Zealand",
+        location="Auckland",
+        work_arrangement="On-site",
+        work_rights="Must hold valid New Zealand work rights.",
+        weekly_hours="40 hours",
+        travel=None,
+        languages=["English", "  ", ""],
+        jurisdiction_notes=[],
+    )
+
+    assert updated.constraints.country == "New Zealand"
+    assert updated.constraints.location == "Auckland"
+    assert updated.constraints.languages == ["English"]
+    assert updated.human_approved is False
+
+
+def test_edit_assessment_plan_sets_methods_and_decision_owner() -> None:
+    role = editable_role()
+
+    updated = edit_assessment_plan(
+        role,
+        assessment_methods=["Structured screening questions", "  ", "Portfolio review"],
+        decision_owner="Talent Acquisition Partner",
+    )
+
+    assert updated.assessment_methods == [
+        "Structured screening questions",
+        "Portfolio review",
+    ]
+    assert updated.decision_owner == "Talent Acquisition Partner"
+    assert updated.human_approved is False
+
+
+def test_add_edit_delete_zuru_dna_behaviour_round_trip() -> None:
+    role = editable_role()
+
+    added = add_zuru_dna_behaviour(
+        role,
+        value="Collaboration",
+        role_behaviour="Shares draft work early and incorporates feedback.",
+        scenario="A campaign draft receives feedback.",
+        evidence_method="Behavioural screening response",
+    )
+    assert len(added.zuru_dna_behaviours) == 1
+    assert added.zuru_dna_behaviours[0].approved_by_human is True
+
+    edited = edit_zuru_dna_behaviour(
+        added,
+        0,
+        value="Shift the Needle",
+        role_behaviour="Ships a working prototype under time pressure.",
+        scenario="A launch date moves up by two weeks.",
+        evidence_method="Behavioural screening response",
+    )
+    assert edited.zuru_dna_behaviours[0].value == "Shift the Needle"
+
+    deleted = delete_zuru_dna_behaviour(edited, 0)
+    assert deleted.zuru_dna_behaviours == []
+
+    with pytest.raises(ZuruDnaBehaviourNotFoundError):
+        delete_zuru_dna_behaviour(deleted, 0)

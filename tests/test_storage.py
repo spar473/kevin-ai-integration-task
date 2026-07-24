@@ -27,6 +27,7 @@ from src.storage import (
     StorageValidationError,
     append_audit_event,
     record_discovery_turn,
+    record_role_section_edit,
 )
 from src.workflow import WorkflowState
 
@@ -183,6 +184,27 @@ def test_discovery_audit_records_metadata_without_manager_answer_text() -> None:
     ]
     assert log.events[0].metadata == {"character_count": 50}
     assert "Confidential manager wording" not in log.model_dump_json()
+
+
+def test_record_role_section_edit_captures_section_and_previous_version() -> None:
+    previous_role = versioned_role()
+    updated_role = previous_role.model_copy(
+        update={"version": 4, "parent_version": 3}
+    )
+
+    log = record_role_section_edit(
+        AuditLog(session_id="abc123"),
+        previous_role=previous_role,
+        updated_role=updated_role,
+        section="business_need",
+    )
+
+    assert [event.event_type for event in log.events] == [AuditEventType.MANAGER_EDIT]
+    assert log.events[0].metadata == {
+        "section": "business_need",
+        "previous_role_version": 3,
+    }
+    assert log.events[0].role_version == 4
 
 
 def test_session_store_preserves_workflow_messages_and_audit_log(

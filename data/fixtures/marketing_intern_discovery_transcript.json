@@ -1,0 +1,577 @@
+{
+  "persona_key": "marketing_intern",
+  "persona_label": "Real-world scenario: Marketing Intern",
+  "brief_source": "docs/ZURU_AI_Integration_Internship_Codex_Context.md \u00a73.6",
+  "documented_expected_behaviour": [
+    "Gather all required information efficiently and in an easy-to-use manner.",
+    "Transform the input into comprehensive requirements.",
+    "Resolve team/brand, dates/location, content responsibilities, platform/tools, design requirement level, campaign responsibilities, success metrics, collaboration behaviours, and screening evidence."
+  ],
+  "initial_manager_statement": "We need a Marketing Intern for summer. They should be creative and good with social media. Maybe some design skills? They'll work with the team on TikTok stuff and help with campaigns. Should be fun to work with.",
+  "turns": [
+    {
+      "turn_index": 1,
+      "stage_before": "basic_info",
+      "manager_message": "We need a Marketing Intern for summer. They should be creative and good with social media. Maybe some design skills? They'll work with the team on TikTok stuff and help with campaigns. Should be fun to work with.",
+      "stage_after": "basic_info",
+      "next_question": {
+        "question_id": "question_001",
+        "question": "What specific TikTok and campaign-support tasks will the intern be responsible for?",
+        "target_stage": "basic_info",
+        "purpose": null
+      },
+      "new_requirement_count": 5
+    },
+    {
+      "turn_index": 2,
+      "stage_before": "basic_info",
+      "manager_message": "They'll script and film short TikTok videos with the team, then I handle final editing and posting myself. On campaigns, they'll help coordinate assets between the design and social teams, not run campaigns solo.",
+      "stage_after": "basic_info",
+      "next_question": {
+        "question_id": "question_001",
+        "question": "Which social-media platforms or responsibilities, beyond TikTok, should the intern support?",
+        "target_stage": "basic_info",
+        "purpose": null
+      },
+      "new_requirement_count": 3
+    },
+    {
+      "turn_index": 3,
+      "stage_before": "basic_info",
+      "manager_message": "Just TikTok and Instagram Reels for now, nothing else.",
+      "stage_after": "basic_info",
+      "next_question": {
+        "question_id": "question_001",
+        "question": "What specific tasks should the intern perform for TikTok and Instagram Reels (for example, scripting, filming, editing, publishing, or analytics)?",
+        "target_stage": "basic_info",
+        "purpose": null
+      },
+      "new_requirement_count": 1
+    },
+    {
+      "turn_index": 4,
+      "stage_before": "basic_info",
+      "manager_message": "Scripting and filming only - I handle editing and publishing myself.",
+      "stage_after": "basic_info",
+      "next_question": {
+        "question_id": "question_001",
+        "question": "What observable, job-relevant collaborative behaviours do you expect from the intern when working with the team?",
+        "target_stage": "basic_info",
+        "purpose": null
+      },
+      "new_requirement_count": 0
+    },
+    {
+      "turn_index": 5,
+      "stage_before": "basic_info",
+      "manager_message": "They should speak up in brainstorms even as the newest person, and take feedback on a script rewrite without getting defensive.",
+      "stage_after": "basic_info",
+      "next_question": {
+        "question_id": "question_001",
+        "question": "What specific tasks should the intern perform for Instagram Reels, and what proficiency level is expected?",
+        "target_stage": "basic_info",
+        "purpose": null
+      },
+      "new_requirement_count": 2
+    },
+    {
+      "turn_index": 6,
+      "stage_before": "basic_info",
+      "manager_message": "Same scripting and filming only, no editing responsibility there either.",
+      "stage_after": "basic_info",
+      "next_question": {
+        "question_id": "question_001",
+        "question": "What specific Instagram Reels tasks and expected proficiency level should the intern have?",
+        "target_stage": "basic_info",
+        "purpose": null
+      },
+      "new_requirement_count": 1
+    },
+    {
+      "turn_index": 7,
+      "stage_before": "basic_info",
+      "manager_message": "They're joining the Brand Marketing team at ZURU Edge in Auckland, on-site, for eight weeks over summer at 40 hours a week, reporting to me as Brand Marketing Lead.",
+      "stage_after": "business_need",
+      "next_question": {
+        "question_id": "question_001",
+        "question": "What are the internship's specific start and end dates?",
+        "target_stage": "business_need",
+        "purpose": null
+      },
+      "new_requirement_count": 3
+    },
+    {
+      "turn_index": 8,
+      "stage_before": "business_need",
+      "manager_message": "December 1st to January 23rd. Design skills are just a nice-to-have - basic Canva edits for a slide or caption graphic, nothing more, and totally learnable in the first couple of weeks.",
+      "stage_after": "business_need",
+      "next_question": {
+        "question_id": "question_001",
+        "question": "What observable, job-relevant collaborative behaviours do you expect from the intern when working with the team?",
+        "target_stage": "business_need",
+        "purpose": null
+      },
+      "new_requirement_count": 2
+    }
+  ],
+  "rejected_turns": [
+    {
+      "note": "Same must-have/ambiguity overlap guard, on a compound platform+logistics answer. Consistently rejected across 3 retries; resolved by splitting the answer into two single-topic turns (turns 3 and 7 below). See docs/DECISIONS_AND_LESSONS.md entry 2026-07-24.",
+      "manager_message": "Just TikTok and Instagram Reels for now. They're on the Brand Marketing team at ZURU Edge, in Auckland, on-site, for 8 weeks over summer, 40 hours a week, reporting to me as the Brand Marketing Lead."
+    },
+    {
+      "note": "The same compound logistics sentence, tried alone one turn later, was rejected once more before succeeding on retry -- consistent with provider-side sampling variance rather than a deterministic input property.",
+      "manager_message": "They're joining the Brand Marketing team at ZURU Edge in Auckland, on-site, for eight weeks over summer at 40 hours a week, reporting to me as Brand Marketing Lead."
+    }
+  ],
+  "observed_gap_stale_ambiguities": "open_ambiguities are only replaced when a later turn's ambiguity source_statement string-matches an existing one (src/discovery.py _merge_open_items). Several ambiguities here (social media platforms, campaign scope, collaboration behaviour, summer dates) were factually resolved by later turns using different wording, but remain listed as open below because the model never re-quoted the original phrase. See docs/DECISIONS_AND_LESSONS.md entry 2026-07-24.",
+  "final_role_specification": {
+    "role_id": "role_live_marketing_intern",
+    "version": 9,
+    "parent_version": 8,
+    "review_status": "draft",
+    "basic_info": {
+      "title": "Marketing Intern",
+      "role_family": "marketing",
+      "role_level": "intern",
+      "employment_type": "internship",
+      "division": null,
+      "team": null,
+      "location": null,
+      "work_arrangement": null,
+      "reporting_to": null,
+      "start_date": null,
+      "end_date": null,
+      "initial_manager_statement": "We need a Marketing Intern for summer. They should be creative and good with social media. Maybe some design skills? They'll work with the team on TikTok stuff and help with campaigns. Should be fun to work with."
+    },
+    "business_need": {
+      "problem": null,
+      "why_now": null,
+      "cost_of_vacancy": null,
+      "is_replacement": null
+    },
+    "success_outcomes": [],
+    "responsibilities": [],
+    "requirements": [
+      {
+        "requirement_id": "requirement_001",
+        "category": "technical",
+        "name": "Social media capability",
+        "description": "The intern should be good with social media.",
+        "priority": "preferred",
+        "proficiency": null,
+        "learnability": null,
+        "accepted_equivalents": [],
+        "business_rationale": "The manager states that the candidate should be good with social media, but does not define the platforms or expected level of capability.",
+        "evidence_methods": [],
+        "source_statement": "They should be creative and good with social media.",
+        "source_turn_id": "initial_manager_statement",
+        "confidence": null,
+        "requires_confirmation": true,
+        "approved_by_human": false
+      },
+      {
+        "requirement_id": "requirement_002",
+        "category": "technical",
+        "name": "Design skills",
+        "description": "Some design skills may be relevant.",
+        "priority": "optional",
+        "proficiency": null,
+        "learnability": null,
+        "accepted_equivalents": [],
+        "business_rationale": "The manager raises design skills tentatively using \u201cMaybe,\u201d without specifying the type or level of design capability.",
+        "evidence_methods": [],
+        "source_statement": "Maybe some design skills?",
+        "source_turn_id": "initial_manager_statement",
+        "confidence": null,
+        "requires_confirmation": true,
+        "approved_by_human": false
+      },
+      {
+        "requirement_id": "requirement_003",
+        "category": "technical",
+        "name": "TikTok work",
+        "description": "Work with the team on TikTok-related activities.",
+        "priority": "preferred",
+        "proficiency": null,
+        "learnability": null,
+        "accepted_equivalents": [],
+        "business_rationale": "The manager explicitly identifies TikTok-related work, while the specific activities and responsibilities are not stated.",
+        "evidence_methods": [],
+        "source_statement": "They'll work with the team on TikTok stuff and help with campaigns.",
+        "source_turn_id": "initial_manager_statement",
+        "confidence": null,
+        "requires_confirmation": true,
+        "approved_by_human": false
+      },
+      {
+        "requirement_id": "requirement_004",
+        "category": "domain",
+        "name": "Campaign support",
+        "description": "Help with campaigns.",
+        "priority": "preferred",
+        "proficiency": null,
+        "learnability": null,
+        "accepted_equivalents": [],
+        "business_rationale": "The manager states that the intern will help with campaigns, without defining campaign types or support tasks.",
+        "evidence_methods": [],
+        "source_statement": "They'll work with the team on TikTok stuff and help with campaigns.",
+        "source_turn_id": "initial_manager_statement",
+        "confidence": null,
+        "requires_confirmation": true,
+        "approved_by_human": false
+      },
+      {
+        "requirement_id": "requirement_005",
+        "category": "logistical",
+        "name": "Summer internship timing",
+        "description": "The internship is needed for summer.",
+        "priority": "preferred",
+        "proficiency": null,
+        "learnability": null,
+        "accepted_equivalents": [],
+        "business_rationale": "The manager specifies that the Marketing Intern is needed for summer but provides no dates or duration.",
+        "evidence_methods": [],
+        "source_statement": "We need a Marketing Intern for summer.",
+        "source_turn_id": "initial_manager_statement",
+        "confidence": null,
+        "requires_confirmation": true,
+        "approved_by_human": false
+      },
+      {
+        "requirement_id": "requirement_006",
+        "category": "technical",
+        "name": "TikTok video scripting and filming",
+        "description": "Create scripts and film short TikTok videos as part of a team.",
+        "priority": "must_have",
+        "proficiency": null,
+        "learnability": null,
+        "accepted_equivalents": [],
+        "business_rationale": "The manager explicitly states that the intern will script and film short TikTok videos.",
+        "evidence_methods": [],
+        "source_statement": "They'll script and film short TikTok videos with the team, then I handle final editing and posting myself.",
+        "source_turn_id": "initial_manager_statement",
+        "confidence": null,
+        "requires_confirmation": true,
+        "approved_by_human": false
+      },
+      {
+        "requirement_id": "requirement_007",
+        "category": "behavioural",
+        "name": "Cross-team asset coordination",
+        "description": "Help coordinate assets between the design and social teams in support of campaigns.",
+        "priority": "must_have",
+        "proficiency": null,
+        "learnability": null,
+        "accepted_equivalents": [],
+        "business_rationale": "The manager explicitly identifies coordinating assets between the design and social teams as the campaign-related responsibility.",
+        "evidence_methods": [],
+        "source_statement": "On campaigns, they'll help coordinate assets between the design and social teams, not run campaigns solo.",
+        "source_turn_id": "initial_manager_statement",
+        "confidence": null,
+        "requires_confirmation": true,
+        "approved_by_human": false
+      },
+      {
+        "requirement_id": "requirement_008",
+        "category": "behavioural",
+        "name": "Work within defined campaign-support scope",
+        "description": "Support campaigns rather than independently run campaigns.",
+        "priority": "must_have",
+        "proficiency": null,
+        "learnability": null,
+        "accepted_equivalents": [],
+        "business_rationale": "The manager explicitly excludes solo campaign ownership from the role.",
+        "evidence_methods": [],
+        "source_statement": "On campaigns, they'll help coordinate assets between the design and social teams, not run campaigns solo.",
+        "source_turn_id": "initial_manager_statement",
+        "confidence": null,
+        "requires_confirmation": true,
+        "approved_by_human": false
+      },
+      {
+        "requirement_id": "requirement_009",
+        "category": "technical",
+        "name": "Instagram Reels work",
+        "description": "Work on Instagram Reels.",
+        "priority": "preferred",
+        "proficiency": null,
+        "learnability": null,
+        "accepted_equivalents": [],
+        "business_rationale": "The manager limits the current platform scope to TikTok and Instagram Reels.",
+        "evidence_methods": [],
+        "source_statement": "Just TikTok and Instagram Reels for now, nothing else.",
+        "source_turn_id": "initial_manager_statement",
+        "confidence": null,
+        "requires_confirmation": true,
+        "approved_by_human": false
+      },
+      {
+        "requirement_id": "requirement_010",
+        "category": "behavioural",
+        "name": "Contribute ideas in brainstorms",
+        "description": "Speak up in brainstorms, including when new to the team.",
+        "priority": "must_have",
+        "proficiency": null,
+        "learnability": null,
+        "accepted_equivalents": [],
+        "business_rationale": "The manager explicitly states that the intern should speak up in brainstorms even as the newest person.",
+        "evidence_methods": [],
+        "source_statement": "They should speak up in brainstorms even as the newest person, and take feedback on a script rewrite without getting defensive.",
+        "source_turn_id": "initial_manager_statement",
+        "confidence": null,
+        "requires_confirmation": true,
+        "approved_by_human": false
+      },
+      {
+        "requirement_id": "requirement_011",
+        "category": "behavioural",
+        "name": "Receive script-rewrite feedback constructively",
+        "description": "Take feedback on a script rewrite without becoming defensive.",
+        "priority": "must_have",
+        "proficiency": null,
+        "learnability": null,
+        "accepted_equivalents": [],
+        "business_rationale": "The manager explicitly identifies constructive receipt of feedback on script rewrites as an expected behaviour.",
+        "evidence_methods": [],
+        "source_statement": "They should speak up in brainstorms even as the newest person, and take feedback on a script rewrite without getting defensive.",
+        "source_turn_id": "initial_manager_statement",
+        "confidence": null,
+        "requires_confirmation": true,
+        "approved_by_human": false
+      },
+      {
+        "requirement_id": "requirement_012",
+        "category": "technical",
+        "name": "No editing responsibility for TikTok video work",
+        "description": "The role does not include editing responsibility for the referenced TikTok video work.",
+        "priority": "must_have",
+        "proficiency": null,
+        "learnability": null,
+        "accepted_equivalents": [],
+        "business_rationale": "The manager explicitly states that there is no editing responsibility.",
+        "evidence_methods": [],
+        "source_statement": "Same scripting and filming only, no editing responsibility there either.",
+        "source_turn_id": "initial_manager_statement",
+        "confidence": null,
+        "requires_confirmation": true,
+        "approved_by_human": false
+      },
+      {
+        "requirement_id": "requirement_013",
+        "category": "logistical",
+        "name": "On-site work in Auckland",
+        "description": "The internship is based on-site in Auckland.",
+        "priority": "must_have",
+        "proficiency": null,
+        "learnability": null,
+        "accepted_equivalents": [],
+        "business_rationale": "The manager explicitly states the location and on-site work arrangement.",
+        "evidence_methods": [],
+        "source_statement": "They're joining the Brand Marketing team at ZURU Edge in Auckland, on-site, for eight weeks over summer at 40 hours a week, reporting to me as Brand Marketing Lead.",
+        "source_turn_id": "initial_manager_statement",
+        "confidence": null,
+        "requires_confirmation": true,
+        "approved_by_human": false
+      },
+      {
+        "requirement_id": "requirement_014",
+        "category": "logistical",
+        "name": "Eight-week summer internship duration",
+        "description": "The internship will run for eight weeks over summer.",
+        "priority": "must_have",
+        "proficiency": null,
+        "learnability": null,
+        "accepted_equivalents": [],
+        "business_rationale": "The manager explicitly states the duration and seasonal timing.",
+        "evidence_methods": [],
+        "source_statement": "They're joining the Brand Marketing team at ZURU Edge in Auckland, on-site, for eight weeks over summer at 40 hours a week, reporting to me as Brand Marketing Lead.",
+        "source_turn_id": "initial_manager_statement",
+        "confidence": null,
+        "requires_confirmation": true,
+        "approved_by_human": false
+      },
+      {
+        "requirement_id": "requirement_015",
+        "category": "logistical",
+        "name": "40-hour work week",
+        "description": "The internship requires 40 hours of work per week.",
+        "priority": "must_have",
+        "proficiency": null,
+        "learnability": null,
+        "accepted_equivalents": [],
+        "business_rationale": "The manager explicitly specifies the weekly hours.",
+        "evidence_methods": [],
+        "source_statement": "They're joining the Brand Marketing team at ZURU Edge in Auckland, on-site, for eight weeks over summer at 40 hours a week, reporting to me as Brand Marketing Lead.",
+        "source_turn_id": "initial_manager_statement",
+        "confidence": null,
+        "requires_confirmation": true,
+        "approved_by_human": false
+      },
+      {
+        "requirement_id": "requirement_016",
+        "category": "technical",
+        "name": "Basic Canva edits",
+        "description": "Create basic Canva edits for a slide or caption graphic.",
+        "priority": "optional",
+        "proficiency": null,
+        "learnability": null,
+        "accepted_equivalents": [],
+        "business_rationale": "The manager describes design skills as a nice-to-have and limits the work to basic Canva edits for slides or caption graphics.",
+        "evidence_methods": [],
+        "source_statement": "Design skills are just a nice-to-have - basic Canva edits for a slide or caption graphic, nothing more, and totally learnable in the first couple of weeks.",
+        "source_turn_id": "initial_manager_statement",
+        "confidence": null,
+        "requires_confirmation": true,
+        "approved_by_human": false
+      },
+      {
+        "requirement_id": "requirement_017",
+        "category": "logistical",
+        "name": "Internship dates",
+        "description": "Internship runs from December 1st to January 23rd.",
+        "priority": "must_have",
+        "proficiency": null,
+        "learnability": null,
+        "accepted_equivalents": [],
+        "business_rationale": "The manager explicitly provides the internship start and end dates.",
+        "evidence_methods": [],
+        "source_statement": "December 1st to January 23rd.",
+        "source_turn_id": "initial_manager_statement",
+        "confidence": null,
+        "requires_confirmation": true,
+        "approved_by_human": false
+      }
+    ],
+    "open_assumptions": [
+      {
+        "assumption_id": "assumption_001",
+        "statement": "The role is expected to involve collaboration with a team.",
+        "source_statement": "They'll work with the team on TikTok stuff and help with campaigns.",
+        "requires_confirmation": true
+      },
+      {
+        "assumption_id": "assumption_002",
+        "statement": "The role may include participation in brainstorming and script-rewrite activities.",
+        "source_statement": "They should speak up in brainstorms even as the newest person, and take feedback on a script rewrite without getting defensive.",
+        "requires_confirmation": true
+      },
+      {
+        "assumption_id": "assumption_003",
+        "statement": "Basic Canva capability may be learned during the first couple of weeks of the internship rather than being required before it begins.",
+        "source_statement": "Design skills are just a nice-to-have - basic Canva edits for a slide or caption graphic, nothing more, and totally learnable in the first couple of weeks.",
+        "requires_confirmation": true
+      }
+    ],
+    "open_ambiguities": [
+      {
+        "ambiguity_id": "ambiguity_001",
+        "description": "\u201cGood with social media\u201d does not identify relevant platforms, tasks, tools, or the expected proficiency level.",
+        "source_statement": "They should be creative and good with social media.",
+        "why_confirmation_is_needed": "The specific social-media capability needed for the role must be defined."
+      },
+      {
+        "ambiguity_id": "ambiguity_002",
+        "description": "\u201cHelp with campaigns\u201d does not specify campaign types, channels, tasks, or the degree of ownership expected.",
+        "source_statement": "They'll work with the team on TikTok stuff and help with campaigns.",
+        "why_confirmation_is_needed": "Campaign-support responsibilities need definition before they can be evaluated."
+      },
+      {
+        "ambiguity_id": "ambiguity_003",
+        "description": "\u201cFun to work with\u201d is subjective culture-fit language. Clarify the observable, job-relevant collaborative behaviours expected when working with the team.",
+        "source_statement": "Should be fun to work with.",
+        "why_confirmation_is_needed": "Subjective personality expectations should be translated into observable collaboration requirements."
+      },
+      {
+        "ambiguity_id": "ambiguity_004",
+        "description": "\u201cSummer\u201d does not provide internship start and end dates or expected duration.",
+        "source_statement": "We need a Marketing Intern for summer.",
+        "why_confirmation_is_needed": "Timing details are needed to define the internship period."
+      },
+      {
+        "ambiguity_id": "ambiguity_005",
+        "description": "The manager confirms TikTok and Instagram Reels as the only platforms for now, but does not specify the tasks, tools, or expected proficiency level for Instagram Reels work.",
+        "source_statement": "Just TikTok and Instagram Reels for now, nothing else.",
+        "why_confirmation_is_needed": "The scope of work on Instagram Reels remains needed to define the role's responsibilities."
+      }
+    ],
+    "zuru_dna_behaviours": [],
+    "constraints": {
+      "country": null,
+      "location": null,
+      "work_arrangement": null,
+      "work_rights": null,
+      "weekly_hours": null,
+      "travel": null,
+      "languages": [],
+      "jurisdiction_notes": []
+    },
+    "assessment_methods": [],
+    "decision_owner": null,
+    "quality": {
+      "readiness_score": null,
+      "contradictions": [],
+      "warnings": [],
+      "warning_acknowledgements": []
+    },
+    "audit": {
+      "schema_version": "1.0",
+      "created_at": "2026-07-23T22:56:54.783365Z",
+      "updated_at": "2026-07-23T22:59:39.242818Z",
+      "model": null,
+      "prompt_version": null,
+      "source_ids": []
+    },
+    "human_approved": false,
+    "approved_by": null,
+    "approved_at": null,
+    "approved_sections": []
+  },
+  "final_quality_report": {
+    "readiness_score": 20,
+    "readiness_interpretation": "not ready",
+    "vague_phrases": [
+      {
+        "phrase": "creative",
+        "category": "subjective_capability",
+        "source": "initial manager statement"
+      },
+      {
+        "phrase": "fun to work with",
+        "category": "subjective_fit",
+        "source": "initial manager statement"
+      },
+      {
+        "phrase": "creative",
+        "category": "subjective_capability",
+        "source": "requirement requirement_001"
+      }
+    ],
+    "excessive_requirement_issues": [
+      {
+        "issue_id": "excessive_day_one_must_haves",
+        "rule": "too_many_day_one_must_haves",
+        "message": "10 day-one must-haves are listed; the manager must explicitly identify the top five.",
+        "requirement_ids": [
+          "requirement_006",
+          "requirement_007",
+          "requirement_008",
+          "requirement_010",
+          "requirement_011",
+          "requirement_012",
+          "requirement_013",
+          "requirement_014",
+          "requirement_015",
+          "requirement_017"
+        ]
+      }
+    ],
+    "blockers": [
+      "Business need is missing.",
+      "At least one success outcome is required.",
+      "At least one responsibility is required.",
+      "At least one assessment method is required.",
+      "A human decision owner is required."
+    ]
+  }
+}

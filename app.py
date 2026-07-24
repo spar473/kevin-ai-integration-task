@@ -17,8 +17,23 @@ from pydantic import ValidationError
 
 from src.config import Settings
 from src.discovery import (
+    ResponsibilityNotFoundError,
+    SuccessOutcomeNotFoundError,
+    ZuruDnaBehaviourNotFoundError,
+    add_responsibility,
+    add_success_outcome,
+    add_zuru_dna_behaviour,
     delete_requirement,
+    delete_responsibility,
+    delete_success_outcome,
+    delete_zuru_dna_behaviour,
+    edit_assessment_plan,
+    edit_business_need,
+    edit_constraints,
     edit_requirement,
+    edit_responsibility,
+    edit_success_outcome,
+    edit_zuru_dna_behaviour,
     take_discovery_turn,
 )
 from src.evaluation import (
@@ -80,6 +95,7 @@ from src.storage import (
     record_human_review,
     record_new_contradictions,
     record_requirement_edit,
+    record_role_section_edit,
 )
 from src.workflow import WorkflowState, advance_workflow
 
@@ -639,6 +655,476 @@ with tabs[1]:
                 st.error(blocker)
         else:
             st.caption("No non-overridable blockers remain.")
+
+        st.markdown("### Complete missing role sections")
+        st.caption(
+            "Discovery only extracts requirements, assumptions, and "
+            "ambiguities from the conversation. The sections below are "
+            "business decisions a manager states directly -- confirm them "
+            "here to clear the blockers above."
+        )
+
+        with st.expander("Business need", expanded=bool(report.blockers)):
+            with st.form(f"business_need_{role.version}"):
+                problem = st.text_area(
+                    "Business problem", value=role.business_need.problem or ""
+                )
+                why_now = st.text_input(
+                    "Why now", value=role.business_need.why_now or ""
+                )
+                cost_of_vacancy = st.text_input(
+                    "Cost of leaving this vacant",
+                    value=role.business_need.cost_of_vacancy or "",
+                )
+                is_replacement = st.checkbox(
+                    "This role replaces someone who left",
+                    value=bool(role.business_need.is_replacement),
+                )
+                business_need_submitted = st.form_submit_button("Save business need")
+            if business_need_submitted:
+                updated_role = edit_business_need(
+                    role,
+                    problem=problem,
+                    why_now=why_now,
+                    cost_of_vacancy=cost_of_vacancy,
+                    is_replacement=is_replacement,
+                )
+                audit_log = record_role_section_edit(
+                    _current_audit_log(role),
+                    previous_role=role,
+                    updated_role=updated_role,
+                    section="business_need",
+                )
+                st.session_state["workflow_state"] = state.model_copy(
+                    update={"role_specification": updated_role}
+                )
+                st.session_state["audit_log"] = audit_log
+                st.rerun()
+
+        with st.expander(
+            f"Success outcomes ({len(role.success_outcomes)})",
+            expanded=not role.success_outcomes,
+        ):
+            for item in role.success_outcomes:
+                with st.container(border=True):
+                    st.caption(item.outcome_id)
+                    with st.form(f"edit_outcome_{role.version}_{item.outcome_id}"):
+                        description = st.text_area(
+                            "Description", value=item.description
+                        )
+                        time_horizon = st.text_input(
+                            "Time horizon", value=item.time_horizon or ""
+                        )
+                        measure = st.text_input("Measure", value=item.measure or "")
+                        priorities = list(RequirementPriority)
+                        priority = st.selectbox(
+                            "Priority",
+                            options=priorities,
+                            index=priorities.index(item.priority),
+                            format_func=lambda value: _human_label(value.value),
+                            key=f"outcome_priority_{role.version}_{item.outcome_id}",
+                        )
+                        outcome_submitted = st.form_submit_button("Save outcome")
+                    if outcome_submitted:
+                        try:
+                            updated_role = edit_success_outcome(
+                                role,
+                                item.outcome_id,
+                                description=description,
+                                time_horizon=time_horizon,
+                                measure=measure,
+                                priority=priority,
+                            )
+                        except (ValueError, ValidationError) as exc:
+                            st.error(f"Outcome could not be updated: {exc}")
+                        else:
+                            audit_log = record_role_section_edit(
+                                _current_audit_log(role),
+                                previous_role=role,
+                                updated_role=updated_role,
+                                section="success_outcomes",
+                            )
+                            st.session_state["workflow_state"] = state.model_copy(
+                                update={"role_specification": updated_role}
+                            )
+                            st.session_state["audit_log"] = audit_log
+                            st.rerun()
+                    if st.button(
+                        "Delete outcome",
+                        key=f"delete_outcome_{role.version}_{item.outcome_id}",
+                    ):
+                        try:
+                            updated_role = delete_success_outcome(
+                                role, item.outcome_id
+                            )
+                        except SuccessOutcomeNotFoundError as exc:
+                            st.error(str(exc))
+                        else:
+                            audit_log = record_role_section_edit(
+                                _current_audit_log(role),
+                                previous_role=role,
+                                updated_role=updated_role,
+                                section="success_outcomes",
+                            )
+                            st.session_state["workflow_state"] = state.model_copy(
+                                update={"role_specification": updated_role}
+                            )
+                            st.session_state["audit_log"] = audit_log
+                            st.rerun()
+
+            st.markdown("**Add an outcome**")
+            with st.form(f"add_outcome_{role.version}"):
+                new_description = st.text_area("Description", key="new_outcome_description")
+                new_time_horizon = st.text_input(
+                    "Time horizon", placeholder="First 90 days", key="new_outcome_horizon"
+                )
+                new_measure = st.text_input(
+                    "Measure", placeholder="Three approved posts a week", key="new_outcome_measure"
+                )
+                new_priority = st.selectbox(
+                    "Priority",
+                    options=list(RequirementPriority),
+                    format_func=lambda value: _human_label(value.value),
+                    key="new_outcome_priority",
+                )
+                add_outcome_submitted = st.form_submit_button("Add outcome")
+            if add_outcome_submitted:
+                if not new_description.strip():
+                    st.error("An outcome description is required.")
+                else:
+                    updated_role = add_success_outcome(
+                        role,
+                        description=new_description,
+                        time_horizon=new_time_horizon,
+                        measure=new_measure,
+                        priority=new_priority,
+                    )
+                    audit_log = record_role_section_edit(
+                        _current_audit_log(role),
+                        previous_role=role,
+                        updated_role=updated_role,
+                        section="success_outcomes",
+                    )
+                    st.session_state["workflow_state"] = state.model_copy(
+                        update={"role_specification": updated_role}
+                    )
+                    st.session_state["audit_log"] = audit_log
+                    st.rerun()
+
+        with st.expander(
+            f"Responsibilities ({len(role.responsibilities)})",
+            expanded=not role.responsibilities,
+        ):
+            for item in role.responsibilities:
+                with st.container(border=True):
+                    st.caption(item.responsibility_id)
+                    with st.form(
+                        f"edit_responsibility_{role.version}_{item.responsibility_id}"
+                    ):
+                        description = st.text_area(
+                            "Description", value=item.description
+                        )
+                        frequency = st.text_input(
+                            "Frequency", value=item.frequency or ""
+                        )
+                        ownership_level = st.text_input(
+                            "Ownership level", value=item.ownership_level or ""
+                        )
+                        priority_options = [None, *RequirementPriority]
+                        responsibility_priority = st.selectbox(
+                            "Priority",
+                            options=priority_options,
+                            index=priority_options.index(item.priority),
+                            format_func=lambda value: (
+                                "Unset" if value is None else _human_label(value.value)
+                            ),
+                            key=(
+                                f"responsibility_priority_{role.version}_"
+                                f"{item.responsibility_id}"
+                            ),
+                        )
+                        responsibility_submitted = st.form_submit_button(
+                            "Save responsibility"
+                        )
+                    if responsibility_submitted:
+                        try:
+                            updated_role = edit_responsibility(
+                                role,
+                                item.responsibility_id,
+                                description=description,
+                                frequency=frequency,
+                                ownership_level=ownership_level,
+                                priority=responsibility_priority,
+                            )
+                        except (ValueError, ValidationError) as exc:
+                            st.error(f"Responsibility could not be updated: {exc}")
+                        else:
+                            audit_log = record_role_section_edit(
+                                _current_audit_log(role),
+                                previous_role=role,
+                                updated_role=updated_role,
+                                section="responsibilities",
+                            )
+                            st.session_state["workflow_state"] = state.model_copy(
+                                update={"role_specification": updated_role}
+                            )
+                            st.session_state["audit_log"] = audit_log
+                            st.rerun()
+                    if st.button(
+                        "Delete responsibility",
+                        key=(
+                            f"delete_responsibility_{role.version}_"
+                            f"{item.responsibility_id}"
+                        ),
+                    ):
+                        try:
+                            updated_role = delete_responsibility(
+                                role, item.responsibility_id
+                            )
+                        except ResponsibilityNotFoundError as exc:
+                            st.error(str(exc))
+                        else:
+                            audit_log = record_role_section_edit(
+                                _current_audit_log(role),
+                                previous_role=role,
+                                updated_role=updated_role,
+                                section="responsibilities",
+                            )
+                            st.session_state["workflow_state"] = state.model_copy(
+                                update={"role_specification": updated_role}
+                            )
+                            st.session_state["audit_log"] = audit_log
+                            st.rerun()
+
+            st.markdown("**Add a responsibility**")
+            with st.form(f"add_responsibility_{role.version}"):
+                new_resp_description = st.text_area(
+                    "Description", key="new_responsibility_description"
+                )
+                new_resp_frequency = st.text_input(
+                    "Frequency", placeholder="Weekly", key="new_responsibility_frequency"
+                )
+                new_resp_ownership = st.text_input(
+                    "Ownership level",
+                    placeholder="Shared",
+                    key="new_responsibility_ownership",
+                )
+                new_resp_priority = st.selectbox(
+                    "Priority",
+                    options=[None, *RequirementPriority],
+                    format_func=lambda value: (
+                        "Unset" if value is None else _human_label(value.value)
+                    ),
+                    key="new_responsibility_priority",
+                )
+                add_responsibility_submitted = st.form_submit_button(
+                    "Add responsibility"
+                )
+            if add_responsibility_submitted:
+                if not new_resp_description.strip():
+                    st.error("A responsibility description is required.")
+                else:
+                    updated_role = add_responsibility(
+                        role,
+                        description=new_resp_description,
+                        frequency=new_resp_frequency,
+                        ownership_level=new_resp_ownership,
+                        priority=new_resp_priority,
+                    )
+                    audit_log = record_role_section_edit(
+                        _current_audit_log(role),
+                        previous_role=role,
+                        updated_role=updated_role,
+                        section="responsibilities",
+                    )
+                    st.session_state["workflow_state"] = state.model_copy(
+                        update={"role_specification": updated_role}
+                    )
+                    st.session_state["audit_log"] = audit_log
+                    st.rerun()
+
+        with st.expander("Constraints and logistics", expanded=False):
+            with st.form(f"constraints_{role.version}"):
+                country = st.text_input("Country", value=role.constraints.country or "")
+                location = st.text_input(
+                    "Location", value=role.constraints.location or ""
+                )
+                work_arrangement = st.text_input(
+                    "Work arrangement",
+                    value=role.constraints.work_arrangement or "",
+                )
+                work_rights = st.text_input(
+                    "Work rights", value=role.constraints.work_rights or ""
+                )
+                weekly_hours = st.text_input(
+                    "Weekly hours", value=role.constraints.weekly_hours or ""
+                )
+                travel = st.text_input("Travel", value=role.constraints.travel or "")
+                languages = st.text_area(
+                    "Languages (one per line)",
+                    value="\n".join(role.constraints.languages),
+                )
+                jurisdiction_notes = st.text_area(
+                    "Jurisdiction notes (one per line)",
+                    value="\n".join(role.constraints.jurisdiction_notes),
+                )
+                constraints_submitted = st.form_submit_button("Save constraints")
+            if constraints_submitted:
+                updated_role = edit_constraints(
+                    role,
+                    country=country,
+                    location=location,
+                    work_arrangement=work_arrangement,
+                    work_rights=work_rights,
+                    weekly_hours=weekly_hours,
+                    travel=travel,
+                    languages=_nonempty_lines(languages),
+                    jurisdiction_notes=_nonempty_lines(jurisdiction_notes),
+                )
+                audit_log = record_role_section_edit(
+                    _current_audit_log(role),
+                    previous_role=role,
+                    updated_role=updated_role,
+                    section="constraints",
+                )
+                st.session_state["workflow_state"] = state.model_copy(
+                    update={"role_specification": updated_role}
+                )
+                st.session_state["audit_log"] = audit_log
+                st.rerun()
+
+        with st.expander("Assessment plan", expanded=not role.assessment_methods):
+            with st.form(f"assessment_plan_{role.version}"):
+                assessment_methods = st.text_area(
+                    "Assessment methods (one per line)",
+                    value="\n".join(role.assessment_methods),
+                    placeholder="Structured screening questions",
+                )
+                decision_owner = st.text_input(
+                    "Decision owner", value=role.decision_owner or ""
+                )
+                assessment_submitted = st.form_submit_button("Save assessment plan")
+            if assessment_submitted:
+                updated_role = edit_assessment_plan(
+                    role,
+                    assessment_methods=_nonempty_lines(assessment_methods),
+                    decision_owner=decision_owner,
+                )
+                audit_log = record_role_section_edit(
+                    _current_audit_log(role),
+                    previous_role=role,
+                    updated_role=updated_role,
+                    section="assessment_plan",
+                )
+                st.session_state["workflow_state"] = state.model_copy(
+                    update={"role_specification": updated_role}
+                )
+                st.session_state["audit_log"] = audit_log
+                st.rerun()
+
+        with st.expander(
+            f"ZURU DNA behaviours ({len(role.zuru_dna_behaviours)})",
+            expanded=not role.zuru_dna_behaviours,
+        ):
+            st.caption(
+                "The six ZURU DNA values: Good Humans Only, Collaboration, "
+                "Radical Candour, Overprepare and Win, Shift the Needle, "
+                "Compounding Improvement."
+            )
+            for dna_index, item in enumerate(role.zuru_dna_behaviours):
+                with st.container(border=True):
+                    with st.form(f"edit_dna_{role.version}_{dna_index}"):
+                        value = st.text_input("ZURU DNA value", value=item.value)
+                        role_behaviour = st.text_area(
+                            "Role-relevant behaviour", value=item.role_behaviour
+                        )
+                        scenario = st.text_input(
+                            "Scenario", value=item.scenario or ""
+                        )
+                        evidence_method = st.text_input(
+                            "Evidence method", value=item.evidence_method or ""
+                        )
+                        dna_submitted = st.form_submit_button("Save behaviour")
+                    if dna_submitted:
+                        try:
+                            updated_role = edit_zuru_dna_behaviour(
+                                role,
+                                dna_index,
+                                value=value,
+                                role_behaviour=role_behaviour,
+                                scenario=scenario,
+                                evidence_method=evidence_method,
+                            )
+                        except (ValueError, ValidationError) as exc:
+                            st.error(f"ZURU DNA behaviour could not be updated: {exc}")
+                        else:
+                            audit_log = record_role_section_edit(
+                                _current_audit_log(role),
+                                previous_role=role,
+                                updated_role=updated_role,
+                                section="zuru_dna_behaviours",
+                            )
+                            st.session_state["workflow_state"] = state.model_copy(
+                                update={"role_specification": updated_role}
+                            )
+                            st.session_state["audit_log"] = audit_log
+                            st.rerun()
+                    if st.button(
+                        "Delete behaviour",
+                        key=f"delete_dna_{role.version}_{dna_index}",
+                    ):
+                        try:
+                            updated_role = delete_zuru_dna_behaviour(role, dna_index)
+                        except ZuruDnaBehaviourNotFoundError as exc:
+                            st.error(str(exc))
+                        else:
+                            audit_log = record_role_section_edit(
+                                _current_audit_log(role),
+                                previous_role=role,
+                                updated_role=updated_role,
+                                section="zuru_dna_behaviours",
+                            )
+                            st.session_state["workflow_state"] = state.model_copy(
+                                update={"role_specification": updated_role}
+                            )
+                            st.session_state["audit_log"] = audit_log
+                            st.rerun()
+
+            st.markdown("**Add a ZURU DNA behaviour**")
+            with st.form(f"add_dna_{role.version}"):
+                new_dna_value = st.text_input(
+                    "ZURU DNA value", placeholder="Collaboration", key="new_dna_value"
+                )
+                new_dna_behaviour = st.text_area(
+                    "Role-relevant behaviour", key="new_dna_behaviour"
+                )
+                new_dna_scenario = st.text_input("Scenario", key="new_dna_scenario")
+                new_dna_evidence = st.text_input(
+                    "Evidence method", key="new_dna_evidence"
+                )
+                add_dna_submitted = st.form_submit_button("Add behaviour")
+            if add_dna_submitted:
+                if not new_dna_value.strip() or not new_dna_behaviour.strip():
+                    st.error("A ZURU DNA value and role-relevant behaviour are required.")
+                else:
+                    updated_role = add_zuru_dna_behaviour(
+                        role,
+                        value=new_dna_value,
+                        role_behaviour=new_dna_behaviour,
+                        scenario=new_dna_scenario,
+                        evidence_method=new_dna_evidence,
+                    )
+                    audit_log = record_role_section_edit(
+                        _current_audit_log(role),
+                        previous_role=role,
+                        updated_role=updated_role,
+                        section="zuru_dna_behaviours",
+                    )
+                    st.session_state["workflow_state"] = state.model_copy(
+                        update={"role_specification": updated_role}
+                    )
+                    st.session_state["audit_log"] = audit_log
+                    st.rerun()
 
         if report.contradictions:
             st.markdown(f"**Contradictions ({len(report.contradictions)})**")
